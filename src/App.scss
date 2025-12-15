@@ -1,0 +1,293 @@
+
+
+#root {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  overflow: hidden;
+  position: relative;
+  font-family: 'Arial', sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-image: url('../public/blackjack-bg.jpeg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  color: #fff;
+}
+
+header {
+  background-image: url('../public/header-bg.jpeg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  border-bottom: 2px solid #000;
+  text-align: left;
+  padding: 1rem;
+  z-index: 11;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  h1 {
+    display: inline;
+    color: #fff;
+    font-family: 'Arial', sans-serif;
+    font-size: 2rem;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+    margin: 0;
+    padding: 0 0 0 80px;
+    &:before {
+      content: '';
+      position: absolute;
+      top: 5px;
+      left: 35px;
+      width: 70px;
+      height: 55px;
+      background-image: url('./assets/card-logo.svg');
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      z-index: -1;
+    }
+  }
+}
+
+.chip-placeholder-container {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  margin-top: 50px;
+}
+
+.poker-chips {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 200px;
+  height: 100%;
+  z-index: 9;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1rem;
+  justify-content: space-between;
+  align-items: center;
+  button.poker-chip {
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    max-width: 150px;
+    aspect-ratio: 1/1;
+    background-color: transparent;
+    margin: 0;
+    padding: 0;
+    img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      border-radius: 50%;
+    }
+  }
+  .chip-placeholder {
+    position: relative;
+    width: 150px;
+    aspect-ratio: 1/1;
+    background-color: transparent;
+    margin: 0;
+    padding: 0;
+  }
+}
+
+.player-balance {
+  position: fixed;
+  top: 50px;
+  right: 1rem;
+  font-size: 2rem;
+  font-weight: bold;
+  text-align: right;
+  color: #fff;
+  padding: 1rem;
+}
+
+main {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.place-bets {
+  font-size: 4rem;
+  font-weight: bold;
+  color: gold;
+  text-align: center;
+  font-family: sans-serif;
+}
+
+.balance {
+  font-size: 1.2rem;
+  font-weight: bold;
+  text-align: center;
+  color: gold;
+}
+
+.card-total {
+  font-size: 2rem;
+  font-weight: bold;
+  color: #fff;
+  text-align: center;
+}
+
+button {
+  border: none;
+  border-radius: 10px;
+  padding: 1rem;
+  font-size: 1.5rem;
+  background-color: gold;
+  color: #000;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  &:hover {
+    background-color: #fff;
+    color: #000;
+  }
+}
+
+.game-status {
+  min-height: 100%;
+  padding: 0;
+  margin: 200px 0 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.dealerHand,
+.playerHand {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  justify-content: center;
+  align-items: center;
+}
+.card-table {
+  position: relative;
+  display: flex;
+  width: 100%;
+  justify-content: center;
+  align-items: center;
+  gap: 5rem;
+  margin: 0;
+  padding: 0;
+}
+.cards {
+  display: flex;
+  justify-content: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  max-width: 500px;
+  min-height: 400px;
+}
+.card {
+  position: relative;
+  box-shadow: 0 0 10px 0 rgba(0, 0, 0, 0.5);
+  border-radius: 10px;
+  width: 140px;
+  height: 188px;
+  flex-shrink: 0;
+  img {
+    object-fit: cover;
+    width: 100%;
+    height: 100%;
+    border: 1px solid #000;
+    border-radius: 10px;
+  }
+}
+
+/* Overlapping for all cards
+.playerHand .cards .card:nth-child(n+2),
+.dealerHand .cards .card:nth-child(n+2) {
+  margin-left: -40px;
+} */
+.card.hide {
+  &::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: #000;
+    background-image: url('https://deckofcardsapi.com/static/img/back.png');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+  }
+}
+
+
+.game-over {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+  padding: 2.5rem;
+  font-size: 7rem;
+  font-weight: bold;
+  color: #fff;
+  z-index: 10;
+  background-color: rgba(0,0,0,0.6);
+}
+
+.buttons {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  align-items: center;
+  margin-top: 4rem;
+  button {
+    font-size: 1.5rem;
+    background-color: gold;
+    color: #000;
+    min-width: 150px;
+  }
+}
+
+.animated-chip {
+  img {
+    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
+  }
+
+  // Optional: Add a subtle scale effect during animation
+  &.animating {
+    animation: chipPulse 0.8s ease-in-out;
+  }
+}
+
+@keyframes chipPulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}

@@ -1,0 +1,401 @@
+import { useState, useEffect, useRef } from "react";
+import { cardDeck } from "./constants/cardDeck";
+import "./App.scss";
+import Header from "./components/Header";
+import PokerChips from "./components/PokerChips";
+
+
+
+function App() {
+  const [deck, setDeck] = useState({});
+  const [cardsInPlay, setCardsInPlay] = useState({
+    playerHand: [],
+    dealerHand: [],
+  });
+  const localGameState = useRef({
+    playerHand: [],
+    dealerHand: [],
+  });
+  const [playerBalance, setPlayerBalance] = useState(2500);
+  const [playerBet, setPlayerBet] = useState(0);
+  // Keep local state in sync with React state
+  useEffect(() => {
+    localGameState.current = { ...cardsInPlay };
+  }, [cardsInPlay]);
+
+  const resetGameState = () => {
+    localGameState.current = {
+      playerHand: [],
+      dealerHand: [],
+    };
+    setPlayerWins(null);
+    setGameOver(false);
+    setShowDealerCards(false);
+    setCardsInPlay({
+      playerHand: [],
+      dealerHand: [],
+    });
+    setPlayerBet(0);
+    
+  };
+
+  // Initialize/reset game state on mount
+  useEffect(() => {
+    resetGameState();
+  }, []);
+  const [playerWins, setPlayerWins] = useState(false);
+  const [gameOver, setGameOver] = useState(false);
+  const [showDealerCards, setShowDealerCards] = useState(false);
+
+  useEffect(() => {
+    getDeck();
+  }, []);
+
+  // Log current totals whenever cards change
+  useEffect(() => {
+    if (cardsInPlay.playerHand.length > 0 || cardsInPlay.dealerHand.length > 0) {
+      console.log('Player total:', countCards(cardsInPlay.playerHand));
+      console.log('Dealer total:', countCards(cardsInPlay.dealerHand));
+      if(countCards(cardsInPlay.playerHand) > 21) {
+        endGame('dealerWins');
+      }
+      if(countCards(cardsInPlay.playerHand) === 21){
+        endGame('playerWins');
+      }
+    }
+  }, [cardsInPlay]);
+
+  function endGame(winner){
+    winner === 'playerWins' ? 
+    setPlayerBalance(playerBalance + playerBet) : 
+    winner === 'dealerWins' ? setPlayerBalance(playerBalance - playerBet) : 
+    null;
+    
+    setTimeout(() => {
+      setPlayerWins(winner === 'playerWins' ? true : winner === 'dealerWins' ? false : null);
+      setGameOver(true);
+    }, 1000);
+  }
+
+
+  function getDeck() {
+    const data = cardDeck;
+    console.log("Deck fetched:", data);
+    setDeck(data);
+  }
+
+  function drawCardSync(handKey) {
+    // Use local game state for tracking used cards
+    const usedCards = [
+      ...localGameState.current.playerHand,
+      ...localGameState.current.dealerHand
+    ];
+
+    const usedSet = new Set(usedCards.map(card => card.code));
+
+    // Filter available cards
+    const available = cardDeck.filter(card => !usedSet.has(card.code));
+
+    if (available.length < 1) {
+      console.warn("Not enough cards left to draw.");
+      return null;
+    }
+
+    // Shuffle
+    const shuffled = [...available];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+
+    const drawnCard = shuffled[0];
+    console.log(`Drew ${drawnCard.rank}${drawnCard.suit[0]} for ${handKey} (${52 - usedSet.size - 1} left)`);
+
+    // Update local state synchronously
+    localGameState.current[handKey] = [...localGameState.current[handKey], drawnCard];
+
+    // Sync to React state
+    setCardsInPlay({ ...localGameState.current });
+
+    return drawnCard;
+  }
+
+  async function getCards(numCards, handKey) {
+    // For backward compatibility - draw multiple cards with delays
+    for (let i = 0; i < numCards; i++) {
+      drawCardSync(handKey);
+      // Small delay to ensure state updates between draws
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+  }
+
+  const dealerPlay = async () => {
+    if (gameOver) {
+      return;
+    }
+    let hitCount = 0;
+    const maxHits = 10;
+    // Check dealer's total after drawing using local state
+    const dealerTotal = countCards(localGameState.current.dealerHand);
+    // Dealer hits until they reach 17 or higher (or bust)
+    while (hitCount < maxHits && !gameOver) {
+      // Check current total BEFORE hitting using local state
+      const currentTotal = countCards(localGameState.current.dealerHand);
+
+      // If dealer already has 17 or higher, stand (except soft 17)
+      if (currentTotal >= 17) {
+        const hasAce = isSoftHand(localGameState.current.dealerHand);
+        if (!(currentTotal === 17 && hasAce)) {
+          console.log(`Dealer stands with ${currentTotal}`);
+          break; // Dealer stands without hitting
+        }
+      }
+
+      hitCount++;
+      console.log(`Dealer hits (attempt ${hitCount})`);
+
+      // Draw one card for dealer
+      const drawnCard = drawCardSync("dealerHand");
+
+      if (!drawnCard) {
+        console.log("No cards left to draw");
+        break;
+      }
+
+      
+
+      if (dealerTotal > 21) {
+        console.log("Dealer busts!");
+        endGame('playerWins');
+        return;
+      }
+    
+      // If dealer now has 17 or higher after hitting, check if they should stand
+      if (dealerTotal >= 17) {
+        const hasAce = isSoftHand(localGameState.current.dealerHand);
+        if (!(dealerTotal === 17 && hasAce)) {
+          console.log("Dealer stands with", dealerTotal);
+          break; // Dealer stands
+        }
+        // If soft 17 after hitting, continue the loop to hit again
+      }
+    
+      
+
+      // Small delay for visual effect
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+
+    // Dealer finished playing - determine winner
+    console.log("Dealer finished playing", dealerTotal);
+    determineWinner();
+  };
+
+  const determineWinner = (finalDealerCards = null) => {
+    const playerTotal = countCards(cardsInPlay.playerHand);
+    const dealerCards = finalDealerCards || cardsInPlay.dealerHand;
+    const dealerTotal = countCards(dealerCards);
+    console.log('determineWInner', playerTotal, dealerTotal);
+    // Check for busts first
+    if (playerTotal > 21) {
+      endGame('dealerWins');
+    } else if (dealerTotal > 21) {
+      endGame('playerWins');
+    } else if(playerTotal === 21 && dealerTotal === 21) {
+      endGame('tie');
+    } else if(playerTotal === 21) {
+      endGame('playerWins');
+    } else if(dealerTotal === 21) {
+      endGame('dealerWins');
+    } else if (playerTotal > dealerTotal) {
+      endGame('playerWins');
+    } else if (dealerTotal > playerTotal) {
+      endGame('dealerWins');
+    } else {
+      endGame('tie');
+    }
+  };
+
+  const stand = () => {
+    setShowDealerCards(true);
+    dealerPlay();
+  };
+
+  const countCards = (cards) => {
+    let total = 0;
+    let aces = 0;
+    // First pass: count aces and add non-ace values
+    for (let card of cards) {
+      if (card.value === 'ACE') {
+        aces++;
+      } else if (['KING', 'QUEEN', 'JACK'].includes(card.value)) {
+        total += 10;
+      } else {
+        total += parseInt(card.value);
+      }
+    }
+    // Second pass: add aces optimally
+    for (let i = 0; i < aces; i++) {
+      if (total + 11 <= 21) {
+        total += 11;  // Safe to add 11
+      } else {
+        total += 1;   // Add 1 to avoid busting
+      }
+    }
+  
+    // if the player/dealer has an ace, check if the total is greater than 21 and if so, subtract 10 from the total
+    if (cards.some(card => card.value === 'ACE')) {
+      if (total > 21) {
+        total -= 10;
+      }
+    }
+    return total;
+  }
+
+  const isSoftHand = (cards) => {
+    // A hand is soft if it contains at least one Ace
+    return cards.some((card) => card.value === "ACE");
+  };
+
+  const dealCards = async () => {
+    await getCards(2, "playerHand");
+    await getCards(2, "dealerHand");
+  };
+
+  const drawCards = async () => {
+    console.log('Player hits - drawing card...');
+    const drawnCard = drawCardSync("playerHand");
+
+    if (drawnCard) {
+      // Wait for state update and let useEffect handle logging
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+  }
+
+  const overlap = 40;
+  const risePattern = [0, 20, 0, 0, 20, 0];
+  const rotationPattern = [-6,  2, 10, -6,  2, 10];
+  const xPattern = [0,  1,  2,  0,  1,  2];
+
+  const handlePokerChipClick = (e) => {
+    const value = Number(e.target.parentNode.dataset.value);
+    setPlayerBet(prevBet => prevBet + value);
+    setPlayerBalance(prevBalance => prevBalance - value);
+  }
+
+  const handleChipRemoved = (chipValue) => {
+    // Add the chip value back to balance and remove from bet
+    setPlayerBalance(prevBalance => prevBalance + chipValue);
+    setPlayerBet(prevBet => prevBet - chipValue);
+  }
+
+  
+  
+
+  return (
+    <>
+    <Header />
+    <PokerChips
+      playerBalance={playerBalance}
+      playerBet={playerBet}
+      handlePokerChipClick={handlePokerChipClick}
+      clearPlaceholder={gameOver}
+      onChipRemoved={handleChipRemoved}
+    />
+    <p className="player-balance">Balance: ${playerBalance}</p>
+    <main>
+      <div className="game-status">
+        <div className="card-table">
+          {playerBet <= 0 && <p className="place-bets">Place Your Bets</p>}
+          {gameOver && (
+            <div className="game-over" onClick={resetGameState}>
+              {playerWins === true && <p>Player wins!</p>}
+              {playerWins === false && <p>Dealer wins!</p>}
+              {playerWins === null && <p>It's a tie!</p>}
+              {/* <button onClick={dealAgain}>Deal Again</button> */}
+            </div>
+          )}
+          <div className="playerHand">
+            <p className="card-total">{cardsInPlay.playerHand.length > 0 ? countCards(cardsInPlay.playerHand) : ''}</p>
+            <div className="cards">
+              {cardsInPlay.playerHand.map((card, index) => {
+                // fallback ensures the layout still works beyond 6 cards
+                const xIndex = xPattern[index] ?? index;
+                const rise = risePattern[index] ?? index * 20;
+                const rotation = rotationPattern[index] ?? 0;
+
+                return (
+                  <div
+                    className="card"
+                    key={card.code}
+                    style={{
+                      transform: `
+                        translateX(-${xIndex * overlap}px)
+                        translateY(-${rise}px)
+                        rotate(${rotation}deg)
+                      `,
+                      zIndex: index + 1
+                    }}
+                  >
+                    <img src={card.image} alt={card.value} />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div className="dealerHand">
+            <p className="card-total">{(gameOver && cardsInPlay.dealerHand.length > 0) ? countCards(cardsInPlay.dealerHand) : ''}</p>
+            <div className="cards">
+                {cardsInPlay.dealerHand.map((card, index) => {
+                  // fallback ensures the layout still works beyond 6 cards
+                  const xIndex = xPattern[index] ?? index;
+                  const rise = risePattern[index] ?? index * 20;
+                  const rotation = rotationPattern[index] ?? 0;
+                  const style = index === 0 && !showDealerCards && "hide";
+                  return (
+                    <div
+                      className={`card ${style}`}
+                      key={card.code}
+                      style={{
+                        transform: `
+                          translateX(-${xIndex * overlap}px)
+                          translateY(-${rise}px)
+                          rotate(${rotation}deg)
+                        `,
+                        zIndex: index + 1
+                      }}
+                    >
+                      <img src={card.image} alt={card.value} />
+                    </div>
+                  );
+                })}
+              </div>
+          </div>
+        </div>
+      </div>
+      <div className="buttons">
+        {cardsInPlay.playerHand.length > 0 && <button onClick={drawCards}>Hit</button>}
+        {(cardsInPlay.playerHand.length === 0 && playerBet > 0) && <button onClick={dealCards}>Deal</button>}
+        {cardsInPlay.playerHand.length > 0 && <button onClick={stand}>Stand</button>}
+      </div>
+    </main>
+    </>
+  );
+}
+
+export default App;
+
+// create a play game button that will show the board
+// create a place your bets button that will allow the user to place a bet
+// create a deal button that will deal the cards to the player and dealer
+// the dealer will draw 2 cards with the first card face down and the second card face up
+// the player will draw 2 cards with both cards face up
+// create a function that will check the value of the cards and determine the points of the players hand
+// create a function that will check the value of the cards and determine the points of the dealers hand
+// check if the players hand is greater than 21, if so, the player loses
+// check if the dealers hand is greater than 21, if so, the dealer loses
+// check if the players hand is equal to 21, if so, the player wins
+// check if the dealers hand is equal to 21, if so, the dealer wins
+// if the players hand and the dealers hand are both less than 21, allow the player to hit or stand
+// if the players hits both the dealer and the player will draw 1 extra card.
+// if the players stands both the dealer and the player will reveal their cards and the winner will be determined
