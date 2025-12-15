@@ -54,12 +54,14 @@ function App() {
   // Log current totals whenever cards change
   useEffect(() => {
     if (cardsInPlay.playerHand.length > 0 || cardsInPlay.dealerHand.length > 0) {
-      console.log('Player total:', countCards(cardsInPlay.playerHand));
-      console.log('Dealer total:', countCards(cardsInPlay.dealerHand));
-      if(countCards(cardsInPlay.playerHand) > 21) {
+      const playerCount = countCards(cardsInPlay.playerHand);
+      const dealerCount = countCards(cardsInPlay.dealerHand);
+      console.log('Player total:', playerCount.display);
+      console.log('Dealer total:', dealerCount.display);
+      if(playerCount.optimal > 21) {
         endGame('dealerWins');
       }
-      if(countCards(cardsInPlay.playerHand) === 21){
+      if(playerCount.optimal === 21){
         endGame('playerWins');
       }
     }
@@ -136,11 +138,13 @@ function App() {
     let hitCount = 0;
     const maxHits = 10;
     // Check dealer's total after drawing using local state
-    const dealerTotal = countCards(localGameState.current.dealerHand);
+    let dealerCount = countCards(localGameState.current.dealerHand);
+    let dealerTotal = dealerCount.optimal;
     // Dealer hits until they reach 17 or higher (or bust)
     while (hitCount < maxHits && !gameOver) {
       // Check current total BEFORE hitting using local state
-      const currentTotal = countCards(localGameState.current.dealerHand);
+      const currentCount = countCards(localGameState.current.dealerHand);
+      const currentTotal = currentCount.optimal;
 
       // If dealer already has 17 or higher, stand (except soft 17)
       if (currentTotal >= 17) {
@@ -162,14 +166,17 @@ function App() {
         break;
       }
 
-      
+      // Update dealer total after drawing
+      dealerCount = countCards(localGameState.current.dealerHand);
+      dealerTotal = dealerCount.optimal;
+      console.log("Dealer total after hit:", dealerTotal);
 
       if (dealerTotal > 21) {
         console.log("Dealer busts!");
         endGame('playerWins');
         return;
       }
-    
+
       // If dealer now has 17 or higher after hitting, check if they should stand
       if (dealerTotal >= 17) {
         const hasAce = isSoftHand(localGameState.current.dealerHand);
@@ -188,14 +195,16 @@ function App() {
 
     // Dealer finished playing - determine winner
     console.log("Dealer finished playing", dealerTotal);
-    determineWinner();
+    determineWinner(localGameState.current.dealerHand);
   };
 
   const determineWinner = (finalDealerCards = null) => {
-    const playerTotal = countCards(cardsInPlay.playerHand);
+    const playerCount = countCards(cardsInPlay.playerHand);
     const dealerCards = finalDealerCards || cardsInPlay.dealerHand;
-    const dealerTotal = countCards(dealerCards);
-    console.log('determineWInner', playerTotal, dealerTotal);
+    const dealerCount = countCards(dealerCards);
+    const playerTotal = playerCount.optimal;
+    const dealerTotal = dealerCount.optimal;
+    console.log('determineWinner - Player:', playerTotal, 'Dealer:', dealerTotal);
     // Check for busts first
     if (playerTotal > 21) {
       endGame('dealerWins');
@@ -222,39 +231,48 @@ function App() {
   };
 
   const countCards = (cards) => {
-    let total = 0;
+    let baseTotal = 0;  // Total without aces
     let aces = 0;
+
     // First pass: count aces and add non-ace values
     for (let card of cards) {
-      if (card.value === 'ACE') {
+      if (card.rank === 'A') {  // Check rank for Ace
         aces++;
-      } else if (['KING', 'QUEEN', 'JACK'].includes(card.value)) {
-        total += 10;
+      } else if (['K', 'Q', 'J'].includes(card.rank)) {  // Face cards
+        baseTotal += 10;
       } else {
-        total += parseInt(card.value);
+        // Numeric cards (2-10) - use rank to get the number
+        baseTotal += parseInt(card.rank) || 0;
       }
     }
-    // Second pass: add aces optimally
+
+    // Calculate different totals
+    const hardTotal = baseTotal + aces;        // All Aces as 1
+    const softTotal = baseTotal + (aces * 11); // All Aces as 11
+
+    // Choose optimal total for gameplay
+    let optimalTotal = baseTotal;
     for (let i = 0; i < aces; i++) {
-      if (total + 11 <= 21) {
-        total += 11;  // Safe to add 11
+      if (optimalTotal + 11 <= 21) {
+        optimalTotal += 11;
       } else {
-        total += 1;   // Add 1 to avoid busting
+        optimalTotal += 1;
       }
     }
-  
-    // if the player/dealer has an ace, check if the total is greater than 21 and if so, subtract 10 from the total
-    if (cards.some(card => card.value === 'ACE')) {
-      if (total > 21) {
-        total -= 10;
-      }
-    }
-    return total;
+
+    return {
+      optimal: optimalTotal,  // What the game uses for logic
+      display: aces > 0 ? `${hardTotal} | ${softTotal}` : optimalTotal,
+      hard: hardTotal,        // Aces as 1
+      soft: softTotal,        // Aces as 11
+      hasAces: aces > 0,
+      aces: aces
+    };
   }
 
   const isSoftHand = (cards) => {
     // A hand is soft if it contains at least one Ace
-    return cards.some((card) => card.value === "ACE");
+    return cards.some((card) => card.rank === "A");
   };
 
   const dealCards = async () => {
@@ -279,14 +297,32 @@ function App() {
 
   const handlePokerChipClick = (e) => {
     const value = Number(e.target.parentNode.dataset.value);
-    setPlayerBet(prevBet => prevBet + value);
-    setPlayerBalance(prevBalance => prevBalance - value);
+    console.log('Adding chip worth $' + value + ', current bet: $' + playerBet);
+    setPlayerBet(prevBet => {
+      const newBet = prevBet + value;
+      console.log('New bet after adding chip: $' + newBet);
+      return newBet;
+    });
+    setPlayerBalance(prevBalance => {
+      const newBalance = prevBalance - value;
+      console.log('New balance after adding chip: $' + newBalance);
+      return newBalance;
+    });
   }
 
   const handleChipRemoved = (chipValue) => {
+    console.log('Removing chip worth $' + chipValue + ', current bet: $' + playerBet);
     // Add the chip value back to balance and remove from bet
-    setPlayerBalance(prevBalance => prevBalance + chipValue);
-    setPlayerBet(prevBet => prevBet - chipValue);
+    setPlayerBalance(prevBalance => {
+      const newBalance = prevBalance + chipValue;
+      console.log('New balance after chip removal: $' + newBalance);
+      return newBalance;
+    });
+    setPlayerBet(prevBet => {
+      const newBet = Math.max(0, prevBet - chipValue); // Prevent negative bets
+      console.log('New bet after chip removal: $' + newBet);
+      return newBet;
+    });
   }
 
   
@@ -316,7 +352,7 @@ function App() {
             </div>
           )}
           <div className="playerHand">
-            <p className="card-total">{cardsInPlay.playerHand.length > 0 ? countCards(cardsInPlay.playerHand) : ''}</p>
+            <p className="card-total">{cardsInPlay.playerHand.length > 0 ? countCards(cardsInPlay.playerHand).display : ''}</p>
             <div className="cards">
               {cardsInPlay.playerHand.map((card, index) => {
                 // fallback ensures the layout still works beyond 6 cards
@@ -344,7 +380,7 @@ function App() {
             </div>
           </div>
           <div className="dealerHand">
-            <p className="card-total">{(gameOver && cardsInPlay.dealerHand.length > 0) ? countCards(cardsInPlay.dealerHand) : ''}</p>
+            <p className="card-total">{(gameOver && cardsInPlay.dealerHand.length > 0) ? countCards(cardsInPlay.dealerHand).display : ''}</p>
             <div className="cards">
                 {cardsInPlay.dealerHand.map((card, index) => {
                   // fallback ensures the layout still works beyond 6 cards

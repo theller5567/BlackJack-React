@@ -1,4 +1,5 @@
 import React, { useState, useRef } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import pk25 from "../assets/pk-25@2x.png";
 import pk50 from "../assets/pk-50@2x.png";
 import pk100 from "../assets/pk-100@2x.png";
@@ -37,40 +38,34 @@ function PokerChips({
   const animateChipToPlaceholder = (chipElement, chipData) => {
     if (!placeholderRef.current || !chipElement) return;
 
-    // Get positions
+    // Prevent multiple simultaneous animations
+    if (animatingChip) {
+      console.warn('Animation already in progress, ignoring new animation request');
+      return;
+    }
+
+    // Get positions for animation
     const chipRect = chipElement.getBoundingClientRect();
     const placeholderRect = placeholderRef.current.getBoundingClientRect();
 
-    // Calculate the translation needed
-    const deltaX = placeholderRect.left - chipRect.left;
-    const deltaY = placeholderRect.top - chipRect.top;
+    const currentId = chipIdCounter;
 
-    // Create animation data
+    // Create animation data for Framer Motion
     const animationData = {
       src: chipData.src,
+      value: chipData.value,
+      id: currentId,
       startX: chipRect.left,
       startY: chipRect.top,
       endX: placeholderRect.left,
       endY: placeholderRect.top,
-      deltaX,
-      deltaY,
-      value: chipData.value,
+      deltaX: placeholderRect.left - chipRect.left,
+      deltaY: placeholderRect.top - chipRect.top,
     };
 
+    console.log('Starting chip animation:', animationData);
     setAnimatingChip(animationData);
-
-    // Start animation after a brief delay to ensure state update
-    setTimeout(() => {
-      setAnimatingChip((prev) => (prev ? { ...prev, animate: true } : null));
-    }, 50);
-
-    // Add the chip to placeholder after animation completes
-    const currentId = chipIdCounter;
-    setTimeout(() => {
-      setAnimatingChip(null);
-      setChipsInPlaceholder(prev => [...prev, { ...chipData, id: currentId }]);
-      setChipIdCounter(prev => prev + 1);
-    }, 500); // Match CSS transition duration
+    setChipIdCounter(prev => prev + 1);
   };
 
   const handleChipClick = (event, chipData) => {
@@ -105,44 +100,33 @@ function PokerChips({
     const originalPosition = chipPositions[chipData.id];
     const placeholderRect = placeholderRef.current.getBoundingClientRect();
 
-    // Calculate translation back to original position
-    const deltaX = originalPosition.left - placeholderRect.left;
-    const deltaY = originalPosition.top - placeholderRect.top;
-
     // Create animation data for moving back
     const animationData = {
       src: chipData.src,
+      value: chipData.value,
+      id: chipData.id,
       startX: placeholderRect.left,
       startY: placeholderRect.top,
       endX: originalPosition.left,
       endY: originalPosition.top,
-      deltaX,
-      deltaY,
-      value: chipData.value,
+      deltaX: originalPosition.left - placeholderRect.left,
+      deltaY: originalPosition.top - placeholderRect.top,
       movingBack: true
     };
 
     setAnimatingChip(animationData);
-
-    // Start animation after a brief delay
-    setTimeout(() => {
-      setAnimatingChip(prev => prev ? { ...prev, animate: true } : null);
-    }, 50);
-
-    // Remove the specific chip from placeholder after animation completes
-    setTimeout(() => {
-      setAnimatingChip(null);
-      setChipsInPlaceholder(prev => prev.filter(chip => chip.id !== chipData.id));
-      // Notify parent that chip was removed
-      onChipRemoved(chipData.value);
-    }, 800);
   };
 
   const setPokerChips = () => {
     return pokerChips.map((pokerChip, index) => {
       if (playerBalance >= pokerChip.value) {
         return (
-          <button
+          <motion.button
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0, opacity: 0 }}
+          whileHover={{ scale: 1.1, transition: { duration: 0.1 } }}
+          transition={{ duration: 0.2, type: "spring", stiffness: 500, damping: 30 }}
             className="poker-chip"
             key={index}
             data-value={pokerChip.value}
@@ -150,7 +134,7 @@ function PokerChips({
             ref={(el) => (chipRefs.current[index] = el)}
           >
             <img src={pokerChip.src} alt="Poker Chip" />
-          </button>
+          </motion.button>
         );
       } else {
         return <div className="chip-placeholder" key={index}></div>;
@@ -163,32 +147,47 @@ function PokerChips({
       <div className="chip-placeholder-container">
         <p className="balance">Betting: ${playerBet}</p>
         <div className="chip-placeholder" ref={placeholderRef}>
-          {chipsInPlaceholder.map((chipData, index) => (
-            <img
-              key={chipData.id}
-              src={chipData.src}
-              alt={`Bet: $${chipData.value}`}
-              onClick={() => handlePlaceholderChipClick(chipData)}
-              style={{
-                position: "absolute",
-                top: `${index * 5}px`,
-                left: `${index * 5}px`,
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-                borderRadius: "50%",
-                cursor: "pointer",
-                transition: "transform 0.1s ease",
-                zIndex: chipsInPlaceholder.length + index,
-              }}
-              onMouseEnter={(e) => {
-                e.target.style.transform = "scale(1.1)";
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.transform = "scale(1)";
-              }}
-            />
-          ))}
+          <AnimatePresence>
+            {chipsInPlaceholder.map((chipData, index) => (
+              <motion.img
+                key={chipData.id}
+                src={chipData.src}
+                alt={`Bet: $${chipData.value}`}
+                onClick={() => handlePlaceholderChipClick(chipData)}
+                layout
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{
+                  scale: 1,
+                  opacity: 1,
+                  x: index * 8,
+                  y: index * 8
+                }}
+                exit={{
+                  scale: 0,
+                  opacity: 0,
+                  transition: { duration: 0.2 }
+                }}
+                transition={{
+                  type: "spring",
+                  stiffness: 500,
+                  damping: 30,
+                  layout: { duration: 0.3 }
+                }}
+                whileHover={{
+                  scale: 1.1,
+                  transition: { duration: 0.1 }
+                }}
+                style={{
+                  position: "absolute",
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                  borderRadius: "50%",
+                  cursor: "pointer",
+                }}
+              />
+            ))}
+          </AnimatePresence>
         </div>
       </div>
       <div className="chips">
@@ -196,37 +195,87 @@ function PokerChips({
       </div>
 
       {/* Animated chip */}
-      {animatingChip && (
-        <div
-          className="animated-chip"
-          style={{
-            position: "fixed",
-            left: animatingChip.startX,
-            top: animatingChip.startY,
-            width: "150px",
-            height: "150px",
-            pointerEvents: "none",
-            zIndex: 1000,
-            transform: animatingChip.animate
-              ? `translate(${animatingChip.deltaX}px, ${animatingChip.deltaY}px)`
-              : "translate(0, 0)",
-            transition: animatingChip.animate
-              ? "transform 500ms ease-out"
-              : "none",
-          }}
-        >
-          <img
-            src={animatingChip.src}
-            alt="Animating Poker Chip"
-            style={{
-              width: "100%",
-              height: "100%",
-              objectFit: "cover",
-              borderRadius: "50%",
+      <AnimatePresence>
+        {animatingChip && (
+          <motion.div
+            className="animated-chip"
+            initial={{
+              x: 0,
+              y: 0,
+              scale: 1,
             }}
-          />
-        </div>
-      )}
+            animate={{
+              x: animatingChip.deltaX,
+              y: animatingChip.deltaY,
+              scale: animatingChip.movingBack ? 0.9 : 1.1,
+            }}
+            exit={{
+              scale: 0,
+              opacity: 0,
+            }}
+            transition={{
+              type: "spring",
+              stiffness: 300,
+              damping: 30,
+              scale: { duration: 0.2 }
+            }}
+            onAnimationComplete={() => {
+              console.log('Animation completed for chip:', animatingChip.id, animatingChip.movingBack ? 'moving back' : 'arriving at placeholder');
+
+              if (animatingChip.movingBack) {
+                // Chip is moving back - remove from placeholder
+                setChipsInPlaceholder(prev => {
+                  const filtered = prev.filter(chip => chip.id !== animatingChip.id);
+                  console.log('Removed chip from placeholder. Before:', prev.length, 'After:', filtered.length);
+                  return filtered;
+                });
+                onChipRemoved(animatingChip.value);
+              } else {
+                // Chip reached placeholder - add to chips array (prevent duplicates)
+                setChipsInPlaceholder(prev => {
+                  // Check if this chip is already in the placeholder
+                  const alreadyExists = prev.some(chip => chip.id === animatingChip.id);
+                  console.log('Chip arrived at placeholder. ID:', animatingChip.id, 'Already exists:', alreadyExists, 'Current count:', prev.length);
+
+                  if (alreadyExists) {
+                    console.warn('Prevented duplicate chip addition');
+                    return prev; // Don't add duplicate
+                  }
+
+                  const newChips = [...prev, {
+                    id: animatingChip.id,
+                    src: animatingChip.src,
+                    value: animatingChip.value
+                  }];
+                  console.log('Added chip to placeholder. New count:', newChips.length);
+                  return newChips;
+                });
+              }
+              setAnimatingChip(null);
+            }}
+            style={{
+              position: "fixed",
+              left: animatingChip.startX,
+              top: animatingChip.startY,
+              width: "150px",
+              height: "150px",
+              pointerEvents: "none",
+              zIndex: 1000,
+            }}
+          >
+            <img
+              src={animatingChip.src}
+              alt="Animating Poker Chip"
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                borderRadius: "50%",
+              }}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
