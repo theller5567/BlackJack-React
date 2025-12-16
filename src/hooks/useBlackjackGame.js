@@ -9,6 +9,7 @@ const ACTIONS = {
   REMOVE_BET: 'REMOVE_BET',
   END_GAME: 'END_GAME',
   RESET_GAME: 'RESET_GAME',
+  NEW_HAND: 'NEW_HAND',
   SHOW_DEALER_CARDS: 'SHOW_DEALER_CARDS',
 };
 
@@ -51,7 +52,7 @@ function gameReducer(state, action) {
       return {
         ...state,
         playerBet: state.playerBet + amount,
-        playerBalance: state.playerBalance - amount,
+        // Don't deduct from balance until end of hand
       };
     }
 
@@ -69,12 +70,14 @@ function gameReducer(state, action) {
       let newBalance = state.playerBalance;
 
       if (winner === 'playerWins') {
+        // Player gets their bet back plus winnings equal to their bet
         newBalance = state.playerBalance + (state.playerBet * 2);
       } else if (winner === 'dealerWins') {
+        // Player loses their bet
         newBalance = state.playerBalance - state.playerBet;
       } else {
-        // tie
-        newBalance = state.playerBalance + state.playerBet;
+        // tie - player gets their bet back
+        newBalance = state.playerBalance;
       }
 
       return {
@@ -86,9 +89,18 @@ function gameReducer(state, action) {
     }
 
     case ACTIONS.RESET_GAME:
+      return initialState;  
+
+    case ACTIONS.NEW_HAND:
       return {
-        ...initialState,
-        deck: state.deck, // Preserve the loaded deck
+        ...state,
+        playerHand: [],
+        dealerHand: [],
+        playerBet: 0,
+        playerWins: null,
+        gameOver: false,
+        showDealerCards: false,
+        usedCards: new Set(), // Reset used cards for new hand
       };
 
     case ACTIONS.SHOW_DEALER_CARDS:
@@ -232,18 +244,21 @@ export function useBlackjackGame() {
     }
     let hitCount = 0;
     const maxHits = 10;
-    // Check dealer's total after drawing using state
-    let dealerCount = countCards(state.dealerHand);
+
+    // Use a local copy of the dealer hand to avoid stale state issues
+    let currentDealerHand = [...state.dealerHand];
+    let dealerCount = countCards(currentDealerHand);
     let dealerTotal = dealerCount.optimal;
+
     // Dealer hits until they reach 17 or higher (or bust)
     while (hitCount < maxHits && !state.gameOver) {
-      // Check current total BEFORE hitting using state
-      const currentCount = countCards(state.dealerHand);
+      // Check current total BEFORE hitting
+      const currentCount = countCards(currentDealerHand);
       const currentTotal = currentCount.optimal;
 
       // If dealer already has 17 or higher, stand (except soft 17)
       if (currentTotal >= 17) {
-        const hasAce = isSoftHand(state.dealerHand);
+        const hasAce = isSoftHand(currentDealerHand);
         if (!(currentTotal === 17 && hasAce)) {
           console.log(`Dealer stands with ${currentTotal}`);
           break; // Dealer stands without hitting
@@ -261,8 +276,11 @@ export function useBlackjackGame() {
         break;
       }
 
+      // Update local dealer hand copy immediately
+      currentDealerHand = [...currentDealerHand, drawnCard];
+
       // Update dealer total after drawing
-      dealerCount = countCards(state.dealerHand);
+      dealerCount = countCards(currentDealerHand);
       dealerTotal = dealerCount.optimal;
       console.log("Dealer total after hit:", dealerTotal);
 
@@ -274,7 +292,7 @@ export function useBlackjackGame() {
 
       // If dealer now has 17 or higher after hitting, check if they should stand
       if (dealerTotal >= 17) {
-        const hasAce = isSoftHand(state.dealerHand);
+        const hasAce = isSoftHand(currentDealerHand);
         if (!(dealerTotal === 17 && hasAce)) {
           console.log("Dealer stands with", dealerTotal);
           break; // Dealer stands
@@ -286,9 +304,9 @@ export function useBlackjackGame() {
       await new Promise(resolve => setTimeout(resolve, 500));
     }
 
-    // Dealer finished playing - determine winner
+    // Dealer finished playing - determine winner using the final hand
     console.log("Dealer finished playing", dealerTotal);
-    determineWinner(state.dealerHand);
+    determineWinner(currentDealerHand);
   }, [state.gameOver, state.dealerHand, drawCardSync, endGame]);
 
   const determineWinner = useCallback((finalDealerCards = null) => {
@@ -357,6 +375,10 @@ export function useBlackjackGame() {
     dispatch({ type: ACTIONS.RESET_GAME });
   }, []);
 
+  const startNewHand = useCallback(() => {
+    dispatch({ type: ACTIONS.NEW_HAND });
+  }, []);
+
   // Return the state and functions that the component needs
   return {
     // State
@@ -376,6 +398,7 @@ export function useBlackjackGame() {
     handlePokerChipClick,
     handleChipRemoved,
     resetGameState,
+    startNewHand,
     countCards,
   };
 }

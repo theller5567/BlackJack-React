@@ -4,8 +4,7 @@ import Header from "./components/Header";
 import PokerChips from "./components/PokerChips";
 import PlayerBalance from "./components/PlayerBalance";
 import { useBlackjackGame } from "./hooks/useBlackjackGame";
-
-
+import { useRef } from "react";
 
 function App() {
   const {
@@ -24,6 +23,7 @@ function App() {
     handlePokerChipClick,
     handleChipRemoved,
     resetGameState,
+    startNewHand,
     countCards,
   } = useBlackjackGame();
 
@@ -31,7 +31,9 @@ function App() {
   const risePattern = [0, 20, 0, 0, 20, 0];
   const rotationPattern = [-6,  2, 10, -6,  2, 10];
   const xPattern = [0,  1,  2,  0,  1,  2];
-
+  const buttonsRef = useRef(null);
+  const buttonsWidth = buttonsRef.current?.getBoundingClientRect().width;
+  const buttonsHeight = buttonsRef.current?.getBoundingClientRect().height;
   
   
 
@@ -48,14 +50,28 @@ function App() {
     <PlayerBalance playerBalance={playerBalance} />
     <main>
       <div className="game-status">
+      <AnimatePresence>
+            {playerBet <= 0 &&
+            <motion.p
+            key="place-bets"
+            layout
+            className="place-bets"
+            initial={{ opacity: 0, y: -300, x: '-50%' }}
+            animate={{ opacity: 1, y: 0, x: '-50%' }}
+            exit={{ opacity: 0, y: -300, x: '-50%' }}
+            transition={{ duration: 0.2, delay: 0.5, type: "spring", stiffness: 400, damping: 25, ease: "easeOut" }}>
+            Place Your Bets
+            </motion.p>}
+          </AnimatePresence>
         <div className="card-table">
-          {playerBet <= 0 && <p className="place-bets">Place Your Bets</p>}
+          
           {gameOver && (
-            <div className="game-over-text" onClick={resetGameState}>
+            <div className="game-over-text">
               {playerWins === true && <p>Player wins!</p>}
               {playerWins === false && <p>Dealer wins!</p>}
               {playerWins === null && <p>It's a tie!</p>}
-              {playerBalance <= 0 && <><p>Game Over!</p><button onClick={() => {}}>Play Again</button></>}
+              <button className="deal-again-button" onClick={startNewHand}>Deal Again</button>
+              {playerBalance <= 0 && <><p>Game Over! You've run out of money.</p><button onClick={resetGameState}>Reset Game</button></>}
             </div>
           )}
           <div className="playerHand">
@@ -162,10 +178,25 @@ function App() {
           </div>
         </div>
       </div>
-      <div className="buttons">
-        {playerHand.length > 0 && <button onClick={drawCards}>Hit</button>}
-        {(playerHand.length === 0 && playerBet > 0) && <button onClick={dealCards}>Deal</button>}
-        {playerHand.length > 0 && <button onClick={stand}>Stand</button>}
+      <div className="buttons" ref={buttonsRef}>
+        <AnimatePresence>
+          {playerHand.length > 0 && 
+          <motion.button
+            className="hit-button" onClick={drawCards}>Hit</motion.button>}
+        </AnimatePresence>
+        <AnimatePresence>
+          {(playerHand.length === 0 && playerBet > 0) && 
+          <motion.button
+          initial={{ opacity: 1, y: 500 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 1, y: 500 }}
+          transition={{ duration: 0.2, ease: "easeOut" }}
+          className="deal-button" onClick={dealCards}>Deal</motion.button>}
+        </AnimatePresence>
+        <AnimatePresence>
+          {playerHand.length > 0 && 
+          <motion.button className="stand-button" onClick={stand}>Stand</motion.button>}
+        </AnimatePresence>
       </div>
     </main>
     </>

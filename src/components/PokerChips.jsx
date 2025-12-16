@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useReducer, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import pk25 from "../assets/pk-25@2x.png";
 import pk50 from "../assets/pk-50@2x.png";
@@ -12,6 +12,103 @@ const pokerChips = [
   { src: pk500, value: 500 },
 ];
 
+// Chip state actions
+const CHIP_ACTIONS = {
+  START_ANIMATION: 'START_ANIMATION',
+  COMPLETE_ANIMATION: 'COMPLETE_ANIMATION',
+  CLEAR_CHIPS: 'CLEAR_CHIPS',
+};
+
+// Initial chip state
+const initialChipState = {
+  animatingChip: null,
+  chipsInPlaceholder: [],
+  chipIdCounter: 0,
+  processedAnimations: new Set(), // Track completed animations to prevent duplicates
+};
+
+// Chip state reducer - handles all chip-related state changes atomically
+function chipReducer(state, action) {
+  switch (action.type) {
+    case CHIP_ACTIONS.START_ANIMATION:
+      return {
+        ...state,
+        animatingChip: action.payload.animationData,
+        chipIdCounter: state.chipIdCounter + 1,
+        processedAnimations: new Set(), // Reset for new animation
+      };
+
+    case CHIP_ACTIONS.COMPLETE_ANIMATION:
+      const { chipData } = action.payload;
+      const animationKey = `${chipData.id}-${chipData.movingBack ? 'back' : 'forward'}`;
+
+      // Prevent processing the same animation multiple times
+      if (state.processedAnimations.has(animationKey)) {
+        console.log('Animation already processed:', animationKey);
+        return state;
+      }
+
+      if (chipData.movingBack) {
+        // Chip is moving back - remove from placeholder
+        const alreadyRemoved = !state.chipsInPlaceholder.some(chip => chip.id === chipData.id);
+        if (alreadyRemoved) {
+          console.log('Chip already removed from placeholder - skipping');
+          return {
+            ...state,
+            animatingChip: null,
+            processedAnimations: new Set([...state.processedAnimations, animationKey]),
+          };
+        }
+
+        const filteredChips = state.chipsInPlaceholder.filter(chip => chip.id !== chipData.id);
+        console.log('Removed chip from placeholder. Before:', state.chipsInPlaceholder.length, 'After:', filteredChips.length);
+
+        return {
+          ...state,
+          chipsInPlaceholder: filteredChips,
+          animatingChip: null,
+          processedAnimations: new Set([...state.processedAnimations, animationKey]),
+        };
+      } else {
+        // Chip arrived at placeholder - add to array
+        const alreadyExists = state.chipsInPlaceholder.some(chip => chip.id === chipData.id);
+        if (alreadyExists) {
+          console.log('Chip already exists in placeholder - skipping duplicate');
+          return {
+            ...state,
+            animatingChip: null,
+            processedAnimations: new Set([...state.processedAnimations, animationKey]),
+          };
+        }
+
+        const newChips = [...state.chipsInPlaceholder, {
+          id: chipData.id,
+          src: chipData.src,
+          value: chipData.value
+        }];
+
+        console.log('Added chip to placeholder. New count:', newChips.length);
+
+        return {
+          ...state,
+          chipsInPlaceholder: newChips,
+          animatingChip: null,
+          processedAnimations: new Set([...state.processedAnimations, animationKey]),
+        };
+      }
+
+    case CHIP_ACTIONS.CLEAR_CHIPS:
+      return {
+        ...state,
+        chipsInPlaceholder: [],
+        processedAnimations: new Set(),
+      };
+
+    default:
+      return state;
+  }
+}
+
 function PokerChips({
   playerBalance,
   playerBet,
@@ -19,19 +116,17 @@ function PokerChips({
   clearPlaceholder = false,
   onChipRemoved = () => {},
 }) {
-  const [animatingChip, setAnimatingChip] = useState(null);
-  const [chipsInPlaceholder, setChipsInPlaceholder] = useState([]);
-  const [chipIdCounter, setChipIdCounter] = useState(0);
+  const [chipState, dispatch] = useReducer(chipReducer, initialChipState);
   const placeholderRef = useRef(null);
   const chipRefs = useRef([]);
 
   // Track original chip positions for animation back
-  const [chipPositions, setChipPositions] = useState({});
+  const [chipPositions, setChipPositions] = React.useState({});
 
   // Clear placeholder when game outcome occurs
   React.useEffect(() => {
     if (clearPlaceholder) {
-      setChipsInPlaceholder([]);
+      dispatch({ type: CHIP_ACTIONS.CLEAR_CHIPS });
     }
   }, [clearPlaceholder]);
 
@@ -39,7 +134,7 @@ function PokerChips({
     if (!placeholderRef.current || !chipElement) return;
 
     // Prevent multiple simultaneous animations
-    if (animatingChip) {
+    if (chipState.animatingChip) {
       console.warn('Animation already in progress, ignoring new animation request');
       return;
     }
@@ -48,7 +143,7 @@ function PokerChips({
     const chipRect = chipElement.getBoundingClientRect();
     const placeholderRect = placeholderRef.current.getBoundingClientRect();
 
-    const currentId = chipIdCounter;
+    const currentId = chipState.chipIdCounter;
 
     // Create animation data for Framer Motion
     const animationData = {
@@ -64,8 +159,10 @@ function PokerChips({
     };
 
     console.log('Starting chip animation:', animationData);
-    setAnimatingChip(animationData);
-    setChipIdCounter(prev => prev + 1);
+    dispatch({
+      type: CHIP_ACTIONS.START_ANIMATION,
+      payload: { animationData }
+    });
   };
 
   const handleChipClick = (event, chipData) => {
@@ -75,7 +172,7 @@ function PokerChips({
     const chipRect = chipElement.getBoundingClientRect();
     setChipPositions(prev => ({
       ...prev,
-      [chipIdCounter]: {
+      [chipState.chipIdCounter]: {
         left: chipRect.left,
         top: chipRect.top,
         width: chipRect.width,
@@ -97,6 +194,12 @@ function PokerChips({
       return;
     }
 
+    // Prevent multiple simultaneous animations
+    if (chipState.animatingChip) {
+      console.warn('Animation already in progress, ignoring chip removal request');
+      return;
+    }
+
     const originalPosition = chipPositions[chipData.id];
     const placeholderRect = placeholderRef.current.getBoundingClientRect();
 
@@ -114,7 +217,10 @@ function PokerChips({
       movingBack: true
     };
 
-    setAnimatingChip(animationData);
+    dispatch({
+      type: CHIP_ACTIONS.START_ANIMATION,
+      payload: { animationData }
+    });
   };
 
   const setPokerChips = () => {
@@ -148,7 +254,7 @@ function PokerChips({
         <p className="balance">Betting: ${playerBet}</p>
         <div className="chip-placeholder" ref={placeholderRef}>
           <AnimatePresence>
-            {chipsInPlaceholder.map((chipData, index) => (
+            {chipState.chipsInPlaceholder.map((chipData, index) => (
               <motion.img
                 key={chipData.id}
                 src={chipData.src}
@@ -195,7 +301,7 @@ function PokerChips({
 
       {/* Animated chip */}
       <AnimatePresence>
-        {animatingChip && (
+        {chipState.animatingChip && (
           <motion.div
             className="animated-chip"
             initial={{
@@ -204,9 +310,9 @@ function PokerChips({
               scale: 0.8,
             }}
             animate={{
-              x: animatingChip.deltaX,
-              y: animatingChip.deltaY,
-              scale: animatingChip.movingBack ? 1 : 0.8,
+              x: chipState.animatingChip.deltaX,
+              y: chipState.animatingChip.deltaY,
+              scale: chipState.animatingChip.movingBack ? 1 : 0.8,
             }}
             exit={{
               scale: 0,
@@ -219,54 +325,23 @@ function PokerChips({
               scale: { duration: 0.2 }
             }}
             onAnimationComplete={() => {
-              // Prevent multiple calls for the same animation
-              if (!animatingChip) return;
+              console.log('Animation completed for chip:', chipState.animatingChip.id, chipState.animatingChip.movingBack ? 'moving back' : 'arriving at placeholder');
 
-              console.log('Animation completed for chip:', animatingChip.id, animatingChip.movingBack ? 'moving back' : 'arriving at placeholder');
+              // Dispatch completion action - reducer handles all state updates atomically
+              dispatch({
+                type: CHIP_ACTIONS.COMPLETE_ANIMATION,
+                payload: { chipData: chipState.animatingChip }
+              });
 
-              if (animatingChip.movingBack) {
-                // Chip is moving back - remove from placeholder
-                setChipsInPlaceholder(prev => {
-                  const alreadyRemoved = !prev.some(chip => chip.id === animatingChip.id);
-                  if (alreadyRemoved) {
-                    console.log('Chip already removed from placeholder - skipping balance update');
-                    return prev;
-                  }
-                  const filtered = prev.filter(chip => chip.id !== animatingChip.id);
-                  console.log('Removed chip from placeholder. Before:', prev.length, 'After:', filtered.length);
-
-                  // Update balance/bet only when chip is actually removed
-                  setTimeout(() => onChipRemoved(animatingChip.value), 0);
-
-                  return filtered;
-                });
-              } else {
-                // Chip reached placeholder - add to chips array (prevent duplicates)
-                setChipsInPlaceholder(prev => {
-                  // Check if this chip is already in the placeholder
-                  const alreadyExists = prev.some(chip => chip.id === animatingChip.id);
-                  console.log('Chip arrived at placeholder. ID:', animatingChip.id, 'Already exists:', alreadyExists, 'Current count:', prev.length);
-
-                  if (alreadyExists) {
-                    console.warn('Prevented duplicate chip addition');
-                    return prev; // Don't add duplicate
-                  }
-
-                  const newChips = [...prev, {
-                    id: animatingChip.id,
-                    src: animatingChip.src,
-                    value: animatingChip.value
-                  }];
-                  console.log('Added chip to placeholder. New count:', newChips.length);
-                  return newChips;
-                });
+              // Handle balance update for chip removal
+              if (chipState.animatingChip.movingBack) {
+                setTimeout(() => onChipRemoved(chipState.animatingChip.value), 0);
               }
-              setAnimatingChip(null);
             }}
             style={{
               position: "fixed",
-              left: animatingChip.startX,
-              top: animatingChip.startY,
+              left: chipState.animatingChip.startX,
+              top: chipState.animatingChip.startY,
               width: "150px",
               height: "150px",
               pointerEvents: "none",
@@ -274,7 +349,7 @@ function PokerChips({
             }}
           >
             <img
-              src={animatingChip.src}
+              src={chipState.animatingChip.src}
               alt="Animating Poker Chip"
               style={{
                 width: "100%",
