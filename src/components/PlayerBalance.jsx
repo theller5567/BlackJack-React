@@ -56,7 +56,7 @@ function PlayerBalance({ playerBalance }) {
         ${displayBalance}
       </motion.span>
     </motion.div>
-  )
+  );
 };
 
 export default PlayerBalance;
