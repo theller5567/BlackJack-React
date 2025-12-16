@@ -13,8 +13,8 @@ const ACTIONS = {
   SHOW_DEALER_CARDS: 'SHOW_DEALER_CARDS',
 };
 
-// Initial state for the reducer
-const initialState = {
+// Function to create fresh initial state to prevent shared mutable references
+const createInitialState = () => ({
   deck: [],
   playerHand: [],
   dealerHand: [],
@@ -24,7 +24,10 @@ const initialState = {
   gameOver: false,
   showDealerCards: false,
   usedCards: new Set(), // Track used cards to prevent duplicates
-};
+});
+
+// Create initial state instance for useReducer
+const initialState = createInitialState();
 
 // Reducer function to handle all state changes
 function gameReducer(state, action) {
@@ -89,7 +92,7 @@ function gameReducer(state, action) {
     }
 
     case ACTIONS.RESET_GAME:
-      return initialState;  
+      return createInitialState();  
 
     case ACTIONS.NEW_HAND:
       return {
@@ -173,7 +176,7 @@ export function useBlackjackGame() {
 
   // Initialize/reset game state on mount
   useEffect(() => {
-    resetGameState();
+    dispatch({ type: ACTIONS.RESET_GAME });
   }, []);
 
   // Log current totals whenever cards change
@@ -183,11 +186,9 @@ export function useBlackjackGame() {
       const dealerCount = countCards(state.dealerHand);
       console.log('Player total:', playerCount.display);
       console.log('Dealer total:', dealerCount.display);
+      // Only check for bust here - determineWinner handles all other win/loss logic
       if(playerCount.optimal > 21) {
         endGame('dealerWins');
-      }
-      if(playerCount.optimal === 21){
-        endGame('playerWins');
       }
     }
   }, [state.playerHand, state.dealerHand]);
