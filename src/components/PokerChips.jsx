@@ -126,7 +126,7 @@ function PokerChips({
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0, opacity: 0 }}
           whileHover={{ scale: 1.1, transition: { duration: 0.1 } }}
-          transition={{ duration: 0.2, type: "spring", stiffness: 500, damping: 30 }}
+          transition={{ duration: 0.1, ease: "easeOut" }}
             className="poker-chip"
             key={index}
             data-value={pokerChip.value}
@@ -157,10 +157,9 @@ function PokerChips({
                 layout
                 initial={{ scale: 0, opacity: 0 }}
                 animate={{
-                  scale: 1,
+                  scale: 0.9,
                   opacity: 1,
-                  x: index * 8,
-                  y: index * 8
+                  x: index * 10
                 }}
                 exit={{
                   scale: 0,
@@ -202,12 +201,12 @@ function PokerChips({
             initial={{
               x: 0,
               y: 0,
-              scale: 1,
+              scale: 0.8,
             }}
             animate={{
               x: animatingChip.deltaX,
               y: animatingChip.deltaY,
-              scale: animatingChip.movingBack ? 0.9 : 1.1,
+              scale: animatingChip.movingBack ? 1 : 0.8,
             }}
             exit={{
               scale: 0,
@@ -220,16 +219,27 @@ function PokerChips({
               scale: { duration: 0.2 }
             }}
             onAnimationComplete={() => {
+              // Prevent multiple calls for the same animation
+              if (!animatingChip) return;
+
               console.log('Animation completed for chip:', animatingChip.id, animatingChip.movingBack ? 'moving back' : 'arriving at placeholder');
 
               if (animatingChip.movingBack) {
                 // Chip is moving back - remove from placeholder
                 setChipsInPlaceholder(prev => {
+                  const alreadyRemoved = !prev.some(chip => chip.id === animatingChip.id);
+                  if (alreadyRemoved) {
+                    console.log('Chip already removed from placeholder - skipping balance update');
+                    return prev;
+                  }
                   const filtered = prev.filter(chip => chip.id !== animatingChip.id);
                   console.log('Removed chip from placeholder. Before:', prev.length, 'After:', filtered.length);
+
+                  // Update balance/bet only when chip is actually removed
+                  setTimeout(() => onChipRemoved(animatingChip.value), 0);
+
                   return filtered;
                 });
-                onChipRemoved(animatingChip.value);
               } else {
                 // Chip reached placeholder - add to chips array (prevent duplicates)
                 setChipsInPlaceholder(prev => {

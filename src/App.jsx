@@ -1,12 +1,15 @@
 import { useState, useEffect, useRef } from "react";
 import { cardDeck } from "./constants/cardDeck";
+import { motion, AnimatePresence } from "motion/react";
 import "./App.scss";
 import Header from "./components/Header";
 import PokerChips from "./components/PokerChips";
+import PlayerBalance from "./components/PlayerBalance";
 
 
 
 function App() {
+  
   const [deck, setDeck] = useState({});
   const [cardsInPlay, setCardsInPlay] = useState({
     playerHand: [],
@@ -67,11 +70,20 @@ function App() {
     }
   }, [cardsInPlay]);
 
+  // Debug balance and bet changes
+  useEffect(() => {
+    console.log('Balance changed to: $' + playerBalance + ', Bet: $' + playerBet);
+  }, [playerBalance, playerBet]);
+
   function endGame(winner){
-    winner === 'playerWins' ? 
-    setPlayerBalance(playerBalance + playerBet) : 
-    winner === 'dealerWins' ? setPlayerBalance(playerBalance - playerBet) : 
-    null;
+    if (winner === 'playerWins') {
+      setPlayerBalance(prevBalance => prevBalance + (playerBet * 2));
+    } else if (winner === 'dealerWins') {
+      setPlayerBalance(prevBalance => prevBalance - playerBet);
+    } else {
+      // tie
+      setPlayerBalance(prevBalance => prevBalance + playerBet);
+    }
     
     setTimeout(() => {
       setPlayerWins(winner === 'playerWins' ? true : winner === 'dealerWins' ? false : null);
@@ -186,8 +198,6 @@ function App() {
         }
         // If soft 17 after hitting, continue the loop to hit again
       }
-    
-      
 
       // Small delay for visual effect
       await new Promise(resolve => setTimeout(resolve, 500));
@@ -311,16 +321,23 @@ function App() {
   }
 
   const handleChipRemoved = (chipValue) => {
-    console.log('Removing chip worth $' + chipValue + ', current bet: $' + playerBet);
+    console.log('=== CHIP REMOVAL START ===');
+    console.log('Removing chip worth $' + chipValue);
+    console.log('Current state - Bet: $' + playerBet + ', Balance: $' + playerBalance);
+
     // Add the chip value back to balance and remove from bet
     setPlayerBalance(prevBalance => {
+      console.log('Balance update - Previous: $' + prevBalance + ', Adding: $' + chipValue);
       const newBalance = prevBalance + chipValue;
-      console.log('New balance after chip removal: $' + newBalance);
+      console.log('Balance update - New: $' + newBalance);
       return newBalance;
     });
+
     setPlayerBet(prevBet => {
+      console.log('Bet update - Previous: $' + prevBet + ', Subtracting: $' + chipValue);
       const newBet = Math.max(0, prevBet - chipValue); // Prevent negative bets
-      console.log('New bet after chip removal: $' + newBet);
+      console.log('Bet update - New: $' + newBet);
+      console.log('=== CHIP REMOVAL END ===');
       return newBet;
     });
   }
@@ -338,50 +355,74 @@ function App() {
       clearPlaceholder={gameOver}
       onChipRemoved={handleChipRemoved}
     />
-    <p className="player-balance">Balance: ${playerBalance}</p>
+    <PlayerBalance playerBalance={playerBalance} />
     <main>
       <div className="game-status">
         <div className="card-table">
           {playerBet <= 0 && <p className="place-bets">Place Your Bets</p>}
           {gameOver && (
-            <div className="game-over" onClick={resetGameState}>
+            <div className="game-over-text" onClick={resetGameState}>
               {playerWins === true && <p>Player wins!</p>}
               {playerWins === false && <p>Dealer wins!</p>}
               {playerWins === null && <p>It's a tie!</p>}
-              {/* <button onClick={dealAgain}>Deal Again</button> */}
+              {playerBalance <= 0 && <><p>Game Over!</p><button onClick={() => {setPlayerBalance(2500)}}>Play Again</button></>}
             </div>
           )}
           <div className="playerHand">
             <p className="card-total">{cardsInPlay.playerHand.length > 0 ? countCards(cardsInPlay.playerHand).display : ''}</p>
             <div className="cards">
-              {cardsInPlay.playerHand.map((card, index) => {
-                // fallback ensures the layout still works beyond 6 cards
-                const xIndex = xPattern[index] ?? index;
-                const rise = risePattern[index] ?? index * 20;
-                const rotation = rotationPattern[index] ?? 0;
+              <AnimatePresence>
+                {cardsInPlay.playerHand.map((card, index) => {
+                  // fallback ensures the layout still works beyond 6 cards
+                  const xIndex = xPattern[index] ?? index;
+                  const rise = risePattern[index] ?? index * 20;
+                  const rotation = rotationPattern[index] ?? 0;
 
-                return (
-                  <div
-                    className="card"
-                    key={card.code}
-                    style={{
-                      transform: `
-                        translateX(-${xIndex * overlap}px)
-                        translateY(-${rise}px)
-                        rotate(${rotation}deg)
-                      `,
-                      zIndex: index + 1
-                    }}
-                  >
-                    <img src={card.image} alt={card.value} />
-                  </div>
-                );
-              })}
+                  return (
+                    <motion.div
+                      layout
+                      initial={{
+                        scale: 0,
+                        opacity: 0,
+                        x: -900,
+                        y: -100,
+                        rotate: 0
+                      }}
+                      animate={{
+                        scale: 1,
+                        opacity: 1,
+                        x: -xIndex * overlap,
+                        y: -rise,
+                        rotate: rotation
+                      }}
+                      exit={{
+                        scale: 0,
+                        opacity: 0,
+                        transition: { duration: 0.2 }
+                      }}
+                      transition={{
+                        type: "spring",
+                        stiffness: 400,
+                        damping: 25,
+                        delay: index * 0.1 // Stagger card appearances
+                      }}
+                      className="card"
+                      key={card.code}
+                      style={{
+                        zIndex: index + 1
+                      }}
+                    >
+                      <img src={card.image} alt={card.value} />
+                    </motion.div>
+                  );
+                })}
+              </AnimatePresence>
             </div>
           </div>
           <div className="dealerHand">
             <p className="card-total">{(gameOver && cardsInPlay.dealerHand.length > 0) ? countCards(cardsInPlay.dealerHand).display : ''}</p>
             <div className="cards">
+              <AnimatePresence>
                 {cardsInPlay.dealerHand.map((card, index) => {
                   // fallback ensures the layout still works beyond 6 cards
                   const xIndex = xPattern[index] ?? index;
@@ -389,23 +430,45 @@ function App() {
                   const rotation = rotationPattern[index] ?? 0;
                   const style = index === 0 && !showDealerCards && "hide";
                   return (
-                    <div
+                    <motion.div
+                      layout
+                      initial={{
+                        scale: 0,
+                        opacity: 0,
+                        x: 900,
+                        y: -100,
+                        rotate: 0
+                      }}
+                      animate={{
+                        scale: 1,
+                        opacity: 1,
+                        x: -xIndex * overlap,
+                        y: -rise,
+                        rotate: rotation
+                      }}
+                      exit={{
+                        scale: 0,
+                        opacity: 0,
+                        transition: { duration: 0.2 }
+                      }}
+                      transition={{
+                        type: "spring",
+                        stiffness: 400,
+                        damping: 25,
+                        delay: index * 0.1 // Stagger card appearances
+                      }}
                       className={`card ${style}`}
                       key={card.code}
                       style={{
-                        transform: `
-                          translateX(-${xIndex * overlap}px)
-                          translateY(-${rise}px)
-                          rotate(${rotation}deg)
-                        `,
                         zIndex: index + 1
                       }}
                     >
                       <img src={card.image} alt={card.value} />
-                    </div>
+                    </motion.div>
                   );
                 })}
-              </div>
+              </AnimatePresence>
+            </div>
           </div>
         </div>
       </div>

@@ -117,16 +117,15 @@ header {
 }
 
 .player-balance {
-  position: fixed;
-  top: 50px;
-  right: 1rem;
+  position: absolute;
+  top: 70px;
+  right: 20px;
   font-size: 2rem;
   font-weight: bold;
   text-align: right;
   color: #fff;
   padding: 1rem;
 }
-
 main {
   margin: 0;
   padding: 0;
@@ -241,8 +240,11 @@ button {
   }
 }
 
+.game-over-module {
+  position: absolute;
+}
 
-.game-over {
+.game-over-text {
   position: fixed;
   top: 0;
   left: 0;
@@ -259,6 +261,15 @@ button {
   color: #fff;
   z-index: 10;
   background-color: rgba(0,0,0,0.6);
+  p {
+    margin: 0;
+  }
+  button {
+    font-size: 2rem;
+    background-color: #000;
+    color: gold;
+    margin: 0;
+  }
 }
 
 .buttons {
