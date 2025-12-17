@@ -11,6 +11,7 @@ const ACTIONS = {
   RESET_GAME: 'RESET_GAME',
   NEW_HAND: 'NEW_HAND',
   SHOW_DEALER_CARDS: 'SHOW_DEALER_CARDS',
+  SET_CARDS_DEALT: 'SET_CARDS_DEALT',
 };
 
 // Function to create fresh initial state to prevent shared mutable references
@@ -23,6 +24,7 @@ const createInitialState = () => ({
   playerWins: null, // true, false, or null (tie)
   gameOver: false,
   showDealerCards: false,
+  cardsDealt: false, // Flag to indicate if initial cards have been dealt
   usedCards: new Set(), // Track used cards to prevent duplicates
 });
 
@@ -94,26 +96,33 @@ function gameReducer(state, action) {
     case ACTIONS.RESET_GAME:
       return createInitialState();  
 
-    case ACTIONS.NEW_HAND:
-      return {
-        ...state,
-        playerHand: [],
-        dealerHand: [],
-        playerBet: 0,
-        playerWins: null,
-        gameOver: false,
-        showDealerCards: false,
-        usedCards: new Set(), // Reset used cards for new hand
-      };
+        case ACTIONS.NEW_HAND:
+          return {
+            ...state,
+            playerHand: [],
+            dealerHand: [],
+            playerBet: 0,
+            playerWins: null,
+            gameOver: false,
+            showDealerCards: false,
+            cardsDealt: false, // Reset cards dealt flag for new hand
+            usedCards: new Set(), // Reset used cards for new hand
+          };
 
-    case ACTIONS.SHOW_DEALER_CARDS:
-      return {
-        ...state,
-        showDealerCards: true,
-      };
+        case ACTIONS.SHOW_DEALER_CARDS:
+          return {
+            ...state,
+            showDealerCards: true,
+          };
 
-    default:
-      return state;
+        case ACTIONS.SET_CARDS_DEALT:
+          return {
+            ...state,
+            cardsDealt: action.payload,
+          };
+
+        default:
+          return state;
   }
 }
 
@@ -170,7 +179,6 @@ export function useBlackjackGame() {
   // Initialize deck on mount
   useEffect(() => {
     const data = cardDeck;
-    console.log("Deck fetched:", data);
     dispatch({ type: ACTIONS.SET_DECK, payload: data });
   }, []);
 
@@ -179,24 +187,22 @@ export function useBlackjackGame() {
     dispatch({ type: ACTIONS.RESET_GAME });
   }, []);
 
-  // Log current totals whenever cards change
+  // Check for bust and 21 whenever cards change
   useEffect(() => {
     if (state.playerHand.length > 0 || state.dealerHand.length > 0) {
       const playerCount = countCards(state.playerHand);
-      const dealerCount = countCards(state.dealerHand);
-      console.log('Player total:', playerCount.display);
-      console.log('Dealer total:', dealerCount.display);
-      // Only check for bust here - determineWinner handles all other win/loss logic
+      // Check for player reaching 21 (blackjack or hitting to 21)
+      if (playerCount.optimal === 21) {
+        endGame('playerWins');
+        return; // Don't check for bust if player has 21
+      }
+      // Check for bust
       if(playerCount.optimal > 21) {
         endGame('dealerWins');
       }
     }
   }, [state.playerHand, state.dealerHand]);
 
-  // Debug balance and bet changes
-  useEffect(() => {
-    console.log('Balance changed to: $' + state.playerBalance + ', Bet: $' + state.playerBet);
-  }, [state.playerBalance, state.playerBet]);
 
   // Game functions
   const drawCardSync = useCallback((handKey) => {
@@ -335,6 +341,9 @@ export function useBlackjackGame() {
     } else {
       endGame('tie');
     }
+    if(playerTotal === 21) {
+      endGame('playerWins');
+    }
   }, [state.playerHand, state.dealerHand, endGame]);
 
   const stand = useCallback(() => {
@@ -345,6 +354,7 @@ export function useBlackjackGame() {
   const dealCards = useCallback(async () => {
     await getCards(2, "playerHand");
     await getCards(2, "dealerHand");
+    dispatch({ type: ACTIONS.SET_CARDS_DEALT, payload: true });
   }, [getCards]);
 
   const drawCards = useCallback(async () => {
@@ -391,6 +401,7 @@ export function useBlackjackGame() {
     playerWins: state.playerWins,
     gameOver: state.gameOver,
     showDealerCards: state.showDealerCards,
+    cardsDealt: state.cardsDealt,
 
     // Functions
     dealCards,

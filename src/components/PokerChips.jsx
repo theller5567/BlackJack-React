@@ -183,10 +183,8 @@ function PokerChips({
     // Start the animation
     animateChipToPlaceholder(chipElement, chipData);
 
-    // Call the original click handler after animation starts
-    setTimeout(() => {
-      handlePokerChipClick(event);
-    }, 200);
+    // Call the original click handler immediately for snappier feel
+    handlePokerChipClick(event);
   };
 
   const handlePlaceholderChipClick = (chipData) => {
@@ -228,11 +226,11 @@ function PokerChips({
       if (playerBalance >= pokerChip.value) {
         return (
           <motion.button
-          initial={{ scale: 0, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0, opacity: 0 }}
-          whileHover={{ scale: 1.1, transition: { duration: 0.1 } }}
-          transition={{ duration: 0.1, ease: "easeOut" }}
+          initial={{ scale: 0, opacity: 0, x: -100 }}
+          animate={{ scale: 1, opacity: 1, x: 0 }}
+          exit={{ scale: 0, opacity: 0, x: -100 }}
+          whileHover={{ scale: 1.1, transition: { duration: 0.1, delay: 0 } }}
+          transition={{ duration: 0.1, ease: "easeOut", delay: (0.1 * index) }}
             className="poker-chip"
             key={index}
             data-value={pokerChip.value}
@@ -307,7 +305,7 @@ function PokerChips({
             initial={{
               x: 0,
               y: 0,
-              scale: 0.8,
+              scale: 0.9, // Start closer to final size for less "pop"
             }}
             animate={{
               x: chipState.animatingChip.deltaX,
@@ -320,9 +318,10 @@ function PokerChips({
             }}
             transition={{
               type: "spring",
-              stiffness: 300,
-              damping: 30,
-              scale: { duration: 0.2 }
+              stiffness: 500,
+              damping: 35,
+              mass: 0.8,
+              scale: { duration: 0.15 }
             }}
             onAnimationComplete={() => {
               console.log('Animation completed for chip:', chipState.animatingChip.id, chipState.animatingChip.movingBack ? 'moving back' : 'arriving at placeholder');

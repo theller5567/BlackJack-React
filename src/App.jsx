@@ -16,6 +16,7 @@ function App() {
     playerWins,
     gameOver,
     showDealerCards,
+    cardsDealt,
     // Functions
     dealCards,
     drawCards,
@@ -32,8 +33,6 @@ function App() {
   const rotationPattern = [-6,  2, 10, -6,  2, 10];
   const xPattern = [0,  1,  2,  0,  1,  2];
   const buttonsRef = useRef(null);
-  const buttonsWidth = buttonsRef.current?.getBoundingClientRect().width;
-  const buttonsHeight = buttonsRef.current?.getBoundingClientRect().height;
   
   
 
@@ -178,24 +177,51 @@ function App() {
           </div>
         </div>
       </div>
-      <div className="buttons" ref={buttonsRef}>
+      <div className="buttons">
         <AnimatePresence>
-          {playerHand.length > 0 && 
-          <motion.button
-            className="hit-button" onClick={drawCards}>Hit</motion.button>}
+          {(cardsDealt && !gameOver) && (
+            <motion.button
+              initial={{ opacity: 0, x: -500 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -500 }}
+              transition={{ duration: 0.2, ease: "easeOut", delay: 0.9, type: "spring", stiffness: 400, damping: 25 }}
+              className="hit-button"
+              onClick={drawCards}
+              key="hit-button"
+            >
+              Hit
+            </motion.button>
+          )}
         </AnimatePresence>
         <AnimatePresence>
-          {(playerHand.length === 0 && playerBet > 0) && 
-          <motion.button
-          initial={{ opacity: 1, y: 500 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 1, y: 500 }}
-          transition={{ duration: 0.2, ease: "easeOut" }}
-          className="deal-button" onClick={dealCards}>Deal</motion.button>}
+          {((playerHand.length === 0 && playerBet > 0) || (!cardsDealt && playerBet > 0 && playerHand.length > 0)) && (
+            <motion.button
+              initial={{ opacity: 1, y: 500 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 1, y: 500 }}
+              transition={{ duration: 0.2, ease: "easeOut", type: "spring", stiffness: 400, damping: 25 }}
+              className="deal-button"
+              onClick={dealCards}
+              key="deal-button"
+            >
+              Deal
+            </motion.button>
+          )}
         </AnimatePresence>
         <AnimatePresence>
-          {playerHand.length > 0 && 
-          <motion.button className="stand-button" onClick={stand}>Stand</motion.button>}
+          {(cardsDealt && !gameOver) && (
+            <motion.button
+              initial={{ opacity: 0, x: 500 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 500 }}
+              transition={{ duration: 0.2, ease: "easeOut", delay: 0.9, type: "spring", stiffness: 400, damping: 25 }}
+              className="stand-button"
+              onClick={stand}
+              key="stand-button"
+            >
+              Stand
+            </motion.button>
+          )}
         </AnimatePresence>
       </div>
     </main>
