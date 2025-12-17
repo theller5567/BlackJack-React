@@ -1,6 +1,10 @@
 import { useReducer, useEffect, useCallback } from "react";
 import { cardDeck } from "../constants/cardDeck";
 
+// Game configuration constants
+const INITIAL_BALANCE = 2500;
+const GAME_END_DELAY = 300;
+
 // Action types for the reducer
 const ACTIONS = {
   SET_DECK: 'SET_DECK',
@@ -19,7 +23,7 @@ const createInitialState = () => ({
   deck: [],
   playerHand: [],
   dealerHand: [],
-  playerBalance: 2500,
+  playerBalance: INITIAL_BALANCE,
   playerBet: 0,
   playerWins: null, // true, false, or null (tie)
   gameOver: false,
@@ -187,11 +191,16 @@ export function useBlackjackGame() {
     dispatch({ type: ACTIONS.RESET_GAME });
   }, []);
 
-  // Check for bust whenever cards change
+  // Check for bust and 21 whenever cards change
   useEffect(() => {
     if (state.playerHand.length > 0 || state.dealerHand.length > 0) {
       const playerCount = countCards(state.playerHand);
-      // Only check for bust here - determineWinner handles all other win/loss logic
+      // Check for player reaching 21 (any number of cards)
+      if (playerCount.optimal === 21) {
+        endGame('playerWins');
+        return; // Don't check for bust if player has 21
+      }
+      // Check for bust
       if(playerCount.optimal > 21) {
         endGame('dealerWins');
       }
@@ -205,7 +214,6 @@ export function useBlackjackGame() {
     const available = cardDeck.filter(card => !state.usedCards.has(card.code));
 
     if (available.length < 1) {
-      console.warn("Not enough cards left to draw.");
       return null;
     }
 
@@ -217,7 +225,6 @@ export function useBlackjackGame() {
     }
 
     const drawnCard = shuffled[0];
-    console.log(`Drew ${drawnCard.rank}${drawnCard.suit[0]} for ${handKey} (${52 - state.usedCards.size - 1} left)`);
 
     // Dispatch action to update state
     dispatch({ type: ACTIONS.DRAW_CARD, payload: { handKey, card: drawnCard } });
@@ -236,9 +243,12 @@ export function useBlackjackGame() {
 
   const endGame = useCallback((winner) => {
     setTimeout(() => {
-      dispatch({ type: ACTIONS.END_GAME, payload: { winner } });
-    }, 1000);
-  }, []);
+      // Prevent state updates if component is unmounted
+      if (!state.gameOver) {
+        dispatch({ type: ACTIONS.END_GAME, payload: { winner } });
+      }
+    }, GAME_END_DELAY);
+  }, [state.gameOver]); // Add dependency to prevent stale closures
 
   const dealerPlay = useCallback(async () => {
     if (state.gameOver) {
@@ -262,19 +272,16 @@ export function useBlackjackGame() {
       if (currentTotal >= 17) {
         const hasAce = isSoftHand(currentDealerHand);
         if (!(currentTotal === 17 && hasAce)) {
-          console.log(`Dealer stands with ${currentTotal}`);
           break; // Dealer stands without hitting
         }
       }
 
       hitCount++;
-      console.log(`Dealer hits (attempt ${hitCount})`);
 
       // Draw one card for dealer
       const drawnCard = drawCardSync("dealerHand");
 
       if (!drawnCard) {
-        console.log("No cards left to draw");
         break;
       }
 
@@ -284,10 +291,8 @@ export function useBlackjackGame() {
       // Update dealer total after drawing
       dealerCount = countCards(currentDealerHand);
       dealerTotal = dealerCount.optimal;
-      console.log("Dealer total after hit:", dealerTotal);
 
       if (dealerTotal > 21) {
-        console.log("Dealer busts!");
         endGame('playerWins');
         return;
       }
@@ -296,7 +301,6 @@ export function useBlackjackGame() {
       if (dealerTotal >= 17) {
         const hasAce = isSoftHand(currentDealerHand);
         if (!(dealerTotal === 17 && hasAce)) {
-          console.log("Dealer stands with", dealerTotal);
           break; // Dealer stands
         }
         // If soft 17 after hitting, continue the loop to hit again
@@ -307,7 +311,6 @@ export function useBlackjackGame() {
     }
 
     // Dealer finished playing - determine winner using the final hand
-    console.log("Dealer finished playing", dealerTotal);
     determineWinner(currentDealerHand);
   }, [state.gameOver, state.dealerHand, drawCardSync, endGame]);
 
@@ -317,7 +320,6 @@ export function useBlackjackGame() {
     const dealerCount = countCards(dealerCards);
     const playerTotal = playerCount.optimal;
     const dealerTotal = dealerCount.optimal;
-    console.log('determineWinner - Player:', playerTotal, 'Dealer:', dealerTotal);
     // Check for busts first
     if (playerTotal > 21) {
       endGame('dealerWins');
@@ -334,9 +336,6 @@ export function useBlackjackGame() {
     } else {
       endGame('tie');
     }
-    if(playerTotal === 21) {
-      endGame('playerWins');
-    }
   }, [state.playerHand, state.dealerHand, endGame]);
 
   const stand = useCallback(() => {
@@ -345,35 +344,34 @@ export function useBlackjackGame() {
   }, [dealerPlay]);
 
   const dealCards = useCallback(async () => {
-    await getCards(2, "playerHand");
-    await getCards(2, "dealerHand");
-    dispatch({ type: ACTIONS.SET_CARDS_DEALT, payload: true });
+    try {
+      await getCards(2, "playerHand");
+      await getCards(2, "dealerHand");
+      dispatch({ type: ACTIONS.SET_CARDS_DEALT, payload: true });
+    } catch (error) {
+      console.error('Failed to deal cards:', error);
+      // Reset game state on failure to prevent inconsistent state
+      dispatch({ type: ACTIONS.RESET_GAME });
+    }
   }, [getCards]);
 
   const drawCards = useCallback(async () => {
-    console.log('Player hits - drawing card...');
     const drawnCard = drawCardSync("playerHand");
 
     if (drawnCard) {
-      // Wait for state update and let useEffect handle logging
+      // Wait for state update
       await new Promise(resolve => setTimeout(resolve, 100));
     }
   }, [drawCardSync]);
 
   const handlePokerChipClick = useCallback((e) => {
     const value = Number(e.target.parentNode.dataset.value);
-    console.log('Adding chip worth $' + value + ', current bet: $' + state.playerBet);
     dispatch({ type: ACTIONS.PLACE_BET, payload: { amount: value } });
-  }, [state.playerBet]);
+  }, [dispatch]); // Add dispatch dependency to prevent stale closures
 
   const handleChipRemoved = useCallback((chipValue) => {
-    console.log('=== CHIP REMOVAL START ===');
-    console.log('Removing chip worth $' + chipValue);
-    console.log('Current state - Bet: $' + state.playerBet + ', Balance: $' + state.playerBalance);
-
     dispatch({ type: ACTIONS.REMOVE_BET, payload: { amount: chipValue } });
-    console.log('=== CHIP REMOVAL END ===');
-  }, [state.playerBet, state.playerBalance]);
+  }, [dispatch]); // Add dispatch dependency to prevent stale closures
 
   const resetGameState = useCallback(() => {
     dispatch({ type: ACTIONS.RESET_GAME });

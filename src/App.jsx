@@ -4,7 +4,13 @@ import Header from "./components/Header";
 import PokerChips from "./components/PokerChips";
 import PlayerBalance from "./components/PlayerBalance";
 import { useBlackjackGame } from "./hooks/useBlackjackGame";
-import { useRef } from "react";
+import { useRef, useMemo } from "react";
+
+// Game configuration constants
+const CARD_OVERLAP = 40;
+const RISE_PATTERN = [0, 20, 0, 0, 20, 0];
+const ROTATION_PATTERN = [-6,  2, 10, -6,  2, 10];
+const X_PATTERN = [0,  1,  2,  0,  1,  2];
 
 function App() {
   const {
@@ -28,24 +34,19 @@ function App() {
     countCards,
   } = useBlackjackGame();
 
-  const overlap = 40;
-  const risePattern = [0, 20, 0, 0, 20, 0];
-  const rotationPattern = [-6,  2, 10, -6,  2, 10];
-  const xPattern = [0,  1,  2,  0,  1,  2];
-  const buttonsRef = useRef(null);
-  
-  
+  // Memoize props to prevent unnecessary re-renders
+  const pokerChipsProps = useMemo(() => ({
+    playerBalance,
+    playerBet,
+    handlePokerChipClick,
+    clearPlaceholder: gameOver || playerBet === 0,
+    onChipRemoved: handleChipRemoved,
+  }), [playerBalance, playerBet, gameOver, handlePokerChipClick, handleChipRemoved]);
 
   return (
     <>
     <Header />
-    <PokerChips
-      playerBalance={playerBalance}
-      playerBet={playerBet}
-      handlePokerChipClick={handlePokerChipClick}
-      clearPlaceholder={gameOver}
-      onChipRemoved={handleChipRemoved}
-    />
+    <PokerChips {...pokerChipsProps} />
     <PlayerBalance playerBalance={playerBalance} />
     <main>
       <div className="game-status">
@@ -64,24 +65,54 @@ function App() {
           </AnimatePresence>
         <div className="card-table">
           
-          {gameOver && (
-            <div className="game-over-text">
-              {playerWins === true && <p>Player wins!</p>}
-              {playerWins === false && <p>Dealer wins!</p>}
-              {playerWins === null && <p>It's a tie!</p>}
-              <button className="deal-again-button" onClick={startNewHand}>Deal Again</button>
-              {playerBalance <= 0 && <><p>Game Over! You've run out of money.</p><button onClick={resetGameState}>Reset Game</button></>}
-            </div>
-          )}
+          <AnimatePresence>
+            {gameOver && (
+              <motion.div
+                className="game-over-text"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.3 }}
+              >
+                {playerWins === true && <p>Player wins!</p>}
+                {playerWins === false && <p>Dealer wins!</p>}
+                {playerWins === null && <p>It's a tie!</p>}
+                <motion.button
+                  className="deal-again-button"
+                  onClick={startNewHand}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  Deal Again
+                </motion.button>
+                {playerBalance <= 0 && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.2 }}
+                  >
+                    <p>Game Over! You've run out of money.</p>
+                    <motion.button
+                      onClick={resetGameState}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      Reset Game
+                    </motion.button>
+                  </motion.div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
           <div className="playerHand">
             <p className="card-total">{playerHand.length > 0 ? countCards(playerHand).display : ''}</p>
             <div className="cards">
               <AnimatePresence>
                 {playerHand.map((card, index) => {
                   // fallback ensures the layout still works beyond 6 cards
-                  const xIndex = xPattern[index] ?? index;
-                  const rise = risePattern[index] ?? index * 20;
-                  const rotation = rotationPattern[index] ?? 0;
+                  const xIndex = X_PATTERN[index] ?? index;
+                  const rise = RISE_PATTERN[index] ?? index * 20;
+                  const rotation = ROTATION_PATTERN[index] ?? 0;
 
                   return (
                     <motion.div
@@ -96,7 +127,7 @@ function App() {
                       animate={{
                         scale: 1,
                         opacity: 1,
-                        x: -xIndex * overlap,
+                        x: -xIndex * CARD_OVERLAP,
                         y: -rise,
                         rotate: rotation
                       }}
@@ -130,9 +161,9 @@ function App() {
               <AnimatePresence>
                 {dealerHand.map((card, index) => {
                   // fallback ensures the layout still works beyond 6 cards
-                  const xIndex = xPattern[index] ?? index;
-                  const rise = risePattern[index] ?? index * 20;
-                  const rotation = rotationPattern[index] ?? 0;
+                  const xIndex = X_PATTERN[index] ?? index;
+                  const rise = RISE_PATTERN[index] ?? index * 20;
+                  const rotation = ROTATION_PATTERN[index] ?? 0;
                   const style = index === 0 && !showDealerCards && "hide";
                   return (
                     <motion.div
@@ -147,7 +178,7 @@ function App() {
                       animate={{
                         scale: 1,
                         opacity: 1,
-                        x: -xIndex * overlap,
+                        x: -xIndex * CARD_OVERLAP,
                         y: -rise,
                         rotate: rotation
                       }}
@@ -184,7 +215,7 @@ function App() {
               initial={{ opacity: 0, x: -500 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -500 }}
-              transition={{ duration: 0.2, ease: "easeOut", delay: 0.9, type: "spring", stiffness: 400, damping: 25 }}
+              transition={{ duration: 0.3, ease: "easeOut", delay: 0.6, type: "spring", stiffness: 400, damping: 25 }}
               className="hit-button"
               onClick={drawCards}
               key="hit-button"
@@ -214,7 +245,7 @@ function App() {
               initial={{ opacity: 0, x: 500 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 500 }}
-              transition={{ duration: 0.2, ease: "easeOut", delay: 0.9, type: "spring", stiffness: 400, damping: 25 }}
+              transition={{ duration: 0.3, ease: "easeOut", delay: 0.6, type: "spring", stiffness: 400, damping: 25 }}
               className="stand-button"
               onClick={stand}
               key="stand-button"

@@ -1,4 +1,4 @@
-import React, { useReducer, useRef } from "react";
+import React, { useReducer, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import pk25 from "../assets/pk-25@2x.png";
 import pk50 from "../assets/pk-50@2x.png";
@@ -116,27 +116,35 @@ function PokerChips({
   const chipRefs = useRef([]);
 
   // Track original chip positions for animation back
-  const [chipPositions, setChipPositions] = React.useState({});
+  const [chipPositions, setChipPositions] = useState({});
 
   // Clear placeholder when game outcome occurs
   React.useEffect(() => {
     if (clearPlaceholder) {
       dispatch({ type: CHIP_ACTIONS.CLEAR_CHIPS });
+      // Clear chip positions to prevent memory leak
+      setChipPositions({});
     }
   }, [clearPlaceholder]);
 
   const animateChipToPlaceholder = (chipElement, chipData) => {
-    if (!placeholderRef.current || !chipElement) return;
+    try {
+      if (!placeholderRef.current || !chipElement) return;
 
-    // Prevent multiple simultaneous animations
-    if (chipState.animatingChip) {
-      console.warn('Animation already in progress, ignoring new animation request');
-      return;
-    }
+      // Prevent multiple simultaneous animations
+      if (chipState.animatingChip) {
+        return;
+      }
 
-    // Get positions for animation
-    const chipRect = chipElement.getBoundingClientRect();
-    const placeholderRect = placeholderRef.current.getBoundingClientRect();
+      // Get positions for animation
+      const chipRect = chipElement.getBoundingClientRect();
+      const placeholderRect = placeholderRef.current.getBoundingClientRect();
+
+      // Validate rect dimensions to prevent animation failures
+      if (chipRect.width === 0 || chipRect.height === 0 ||
+          placeholderRect.width === 0 || placeholderRect.height === 0) {
+        return;
+      }
 
     const currentId = chipState.chipIdCounter;
 
@@ -157,6 +165,9 @@ function PokerChips({
           type: CHIP_ACTIONS.START_ANIMATION,
           payload: { animationData }
         });
+    } catch (error) {
+      console.error('Chip animation setup failed:', error);
+    }
   };
 
   const handleChipClick = (event, chipData) => {
@@ -324,9 +335,9 @@ function PokerChips({
                 payload: { chipData: chipState.animatingChip }
               });
 
-              // Handle balance update for chip removal
+              // Handle balance update for chip removal synchronously
               if (chipState.animatingChip.movingBack) {
-                setTimeout(() => onChipRemoved(chipState.animatingChip.value), 0);
+                onChipRemoved(chipState.animatingChip.value);
               }
             }}
             style={{
