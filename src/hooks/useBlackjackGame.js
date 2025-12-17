@@ -1,4 +1,4 @@
-import { useReducer, useEffect, useCallback } from "react";
+import { useReducer, useEffect, useCallback, useState } from "react";
 import { cardDeck } from "../constants/cardDeck";
 
 // Game configuration constants
@@ -114,9 +114,6 @@ function gameReducer(state, action) {
       };
     }
 
-    case ACTIONS.RESET_GAME:
-      return createInitialState();  
-
     case ACTIONS.NEW_HAND:
       return {
         ...state,
@@ -127,13 +124,19 @@ function gameReducer(state, action) {
         gameOver: false,
         showDealerCards: false,
         cardsDealt: false, // Reset cards dealt flag for new hand
+        isDealing: false, // Reset loading states for new hand
+        isDrawingCard: false,
         usedCards: new Set(), // Reset used cards for new hand
       };
 
     case ACTIONS.RESET_GAME:
       // Reset card instance counter for completely new games
       cardInstanceCounter = 0;
-      return createInitialState();
+      // Ensure all loading states are reset
+      return {
+        ...createInitialState(),
+        isPreloading: false, // Explicitly ensure preloading is false
+      };
 
         case ACTIONS.SHOW_DEALER_CARDS:
           return {
@@ -274,9 +277,12 @@ const preloadCardImages = async (onProgress) => {
 // Custom hook for Blackjack game logic
 export function useBlackjackGame() {
   const [state, dispatch] = useReducer(gameReducer, initialState);
+  const [hasPreloaded, setHasPreloaded] = useState(false);
 
-  // Initialize deck and preload images on mount
+  // Initialize deck and preload images on mount (only once)
   useEffect(() => {
+    if (hasPreloaded) return; // Prevent multiple preloading
+
     const initializeGame = async () => {
       try {
         // Start preloading images
@@ -298,15 +304,17 @@ export function useBlackjackGame() {
 
         // Mark preloading as complete
         dispatch({ type: ACTIONS.SET_PRELOADING, payload: false });
+        setHasPreloaded(true); // Prevent future preloading
       } catch (error) {
         console.error('Failed to preload card images:', error);
         // Still allow game to continue with fallback images
         dispatch({ type: ACTIONS.SET_PRELOADING, payload: false });
+        setHasPreloaded(true); // Prevent future preloading even on error
       }
     };
 
     initializeGame();
-  }, []);
+  }, [hasPreloaded]); // Include hasPreloaded in deps to prevent multiple runs
 
   // Initialize/reset game state on mount
   useEffect(() => {
@@ -328,6 +336,19 @@ export function useBlackjackGame() {
       }
     }
   }, [state.playerHand, state.dealerHand]);
+
+  // Safety net: Reset stuck loading states after 10 seconds
+  useEffect(() => {
+    if (state.isDealing || state.isDrawingCard) {
+      const timeout = setTimeout(() => {
+        console.warn('Loading state was stuck, resetting...');
+        dispatch({ type: ACTIONS.SET_DEALING, payload: false });
+        dispatch({ type: ACTIONS.SET_DRAWING_CARD, payload: false });
+      }, 10000); // 10 second timeout
+
+      return () => clearTimeout(timeout);
+    }
+  }, [state.isDealing, state.isDrawingCard]);
 
 
   // Game functions
