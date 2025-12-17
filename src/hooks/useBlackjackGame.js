@@ -3,7 +3,7 @@ import { cardDeck } from "../constants/cardDeck";
 
 // Game configuration constants
 const INITIAL_BALANCE = 2500;
-const GAME_END_DELAY = 300;
+const GAME_END_DELAY = 100; // Reduced since images are preloaded
 
 // Action types for the reducer
 const ACTIONS = {
@@ -270,12 +270,17 @@ export function useBlackjackGame() {
           dispatch({ type: ACTIONS.UPDATE_PRELOAD_PROGRESS, payload: progress });
         });
 
+        // Minimum loading time promise (2 seconds)
+        const minimumLoadingTime = new Promise(resolve =>
+          setTimeout(resolve, 2000)
+        );
+
         // Set deck data immediately
         const data = cardDeck;
         dispatch({ type: ACTIONS.SET_DECK, payload: data });
 
-        // Wait for images to preload
-        await preloadPromise;
+        // Wait for both images to preload AND minimum loading time
+        await Promise.all([preloadPromise, minimumLoadingTime]);
 
         // Mark preloading as complete
         dispatch({ type: ACTIONS.SET_PRELOADING, payload: false });
@@ -336,11 +341,10 @@ export function useBlackjackGame() {
   }, [state.usedCards]);
 
   const getCards = useCallback(async (numCards, handKey) => {
-    // For backward compatibility - draw multiple cards with delays
+    // Draw multiple cards instantly since images are preloaded
     for (let i = 0; i < numCards; i++) {
       drawCardSync(handKey);
-      // Small delay to ensure state updates between draws
-      await new Promise(resolve => setTimeout(resolve, 10));
+      // No artificial delay needed - images are cached
     }
   }, [drawCardSync]);
 
@@ -409,8 +413,8 @@ export function useBlackjackGame() {
         // If soft 17 after hitting, continue the loop to hit again
       }
 
-      // Small delay for visual effect
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Minimal delay for visual effect since images are preloaded
+      await new Promise(resolve => setTimeout(resolve, 50));
     }
 
     // Dealer finished playing - determine winner using the final hand
@@ -467,8 +471,8 @@ export function useBlackjackGame() {
       const drawnCard = drawCardSync("playerHand");
 
       if (drawnCard) {
-        // Wait for state update
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // No artificial delay needed - images are preloaded and cached
+        // State updates happen synchronously since images are ready
       }
     } finally {
       dispatch({ type: ACTIONS.SET_DRAWING_CARD, payload: false });
