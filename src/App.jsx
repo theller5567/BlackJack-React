@@ -149,7 +149,7 @@ function App() {
                         delay: index * 0.1 // Stagger card appearances
                       }}
                       className="card"
-                      key={card.code}
+                      key={`player-${card.instanceId || card.code}-${index}`}
                       style={{
                         zIndex: index + 1
                       }}
@@ -200,7 +200,7 @@ function App() {
                         delay: index * 0.1 // Stagger card appearances
                       }}
                       className={`card ${style}`}
-                      key={card.code}
+                      key={`dealer-${card.instanceId || card.code}-${index}`}
                       style={{
                         zIndex: index + 1
                       }}

@@ -22,6 +22,9 @@ const ACTIONS = {
   UPDATE_PRELOAD_PROGRESS: 'UPDATE_PRELOAD_PROGRESS',
 };
 
+// Counter for unique card instance IDs
+let cardInstanceCounter = 0;
+
 // Function to create fresh initial state to prevent shared mutable references
 const createInitialState = () => ({
   deck: [],
@@ -57,9 +60,15 @@ function gameReducer(state, action) {
       const newUsedCards = new Set(state.usedCards);
       newUsedCards.add(card.code);
 
+      // Add unique instance ID to prevent React key conflicts
+      const cardWithId = {
+        ...card,
+        instanceId: `${card.code}-${++cardInstanceCounter}`
+      };
+
       return {
         ...state,
-        [handKey]: [...state[handKey], card],
+        [handKey]: [...state[handKey], cardWithId],
         usedCards: newUsedCards,
       };
     }
@@ -108,18 +117,23 @@ function gameReducer(state, action) {
     case ACTIONS.RESET_GAME:
       return createInitialState();  
 
-        case ACTIONS.NEW_HAND:
-          return {
-            ...state,
-            playerHand: [],
-            dealerHand: [],
-            playerBet: 0,
-            playerWins: null,
-            gameOver: false,
-            showDealerCards: false,
-            cardsDealt: false, // Reset cards dealt flag for new hand
-            usedCards: new Set(), // Reset used cards for new hand
-          };
+    case ACTIONS.NEW_HAND:
+      return {
+        ...state,
+        playerHand: [],
+        dealerHand: [],
+        playerBet: 0,
+        playerWins: null,
+        gameOver: false,
+        showDealerCards: false,
+        cardsDealt: false, // Reset cards dealt flag for new hand
+        usedCards: new Set(), // Reset used cards for new hand
+      };
+
+    case ACTIONS.RESET_GAME:
+      // Reset card instance counter for completely new games
+      cardInstanceCounter = 0;
+      return createInitialState();
 
         case ACTIONS.SHOW_DEALER_CARDS:
           return {
