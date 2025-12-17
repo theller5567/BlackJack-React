@@ -49,19 +49,17 @@ function chipReducer(state, action) {
       }
 
       if (chipData.movingBack) {
-        // Chip is moving back - remove from placeholder
-        const alreadyRemoved = !state.chipsInPlaceholder.some(chip => chip.id === chipData.id);
-        if (alreadyRemoved) {
-          console.log('Chip already removed from placeholder - skipping');
-          return {
-            ...state,
-            animatingChip: null,
-            processedAnimations: new Set([...state.processedAnimations, animationKey]),
-          };
-        }
+            // Chip is moving back - remove from placeholder
+            const alreadyRemoved = !state.chipsInPlaceholder.some(chip => chip.id === chipData.id);
+            if (alreadyRemoved) {
+              return {
+                ...state,
+                animatingChip: null,
+                processedAnimations: new Set([...state.processedAnimations, animationKey]),
+              };
+            }
 
-        const filteredChips = state.chipsInPlaceholder.filter(chip => chip.id !== chipData.id);
-        console.log('Removed chip from placeholder. Before:', state.chipsInPlaceholder.length, 'After:', filteredChips.length);
+            const filteredChips = state.chipsInPlaceholder.filter(chip => chip.id !== chipData.id);
 
         return {
           ...state,
@@ -70,24 +68,21 @@ function chipReducer(state, action) {
           processedAnimations: new Set([...state.processedAnimations, animationKey]),
         };
       } else {
-        // Chip arrived at placeholder - add to array
-        const alreadyExists = state.chipsInPlaceholder.some(chip => chip.id === chipData.id);
-        if (alreadyExists) {
-          console.log('Chip already exists in placeholder - skipping duplicate');
-          return {
-            ...state,
-            animatingChip: null,
-            processedAnimations: new Set([...state.processedAnimations, animationKey]),
-          };
-        }
+            // Chip arrived at placeholder - add to array
+            const alreadyExists = state.chipsInPlaceholder.some(chip => chip.id === chipData.id);
+            if (alreadyExists) {
+              return {
+                ...state,
+                animatingChip: null,
+                processedAnimations: new Set([...state.processedAnimations, animationKey]),
+              };
+            }
 
-        const newChips = [...state.chipsInPlaceholder, {
-          id: chipData.id,
-          src: chipData.src,
-          value: chipData.value
-        }];
-
-        console.log('Added chip to placeholder. New count:', newChips.length);
+            const newChips = [...state.chipsInPlaceholder, {
+              id: chipData.id,
+              src: chipData.src,
+              value: chipData.value
+            }];
 
         return {
           ...state,
@@ -158,11 +153,10 @@ function PokerChips({
       deltaY: placeholderRect.top - chipRect.top,
     };
 
-    console.log('Starting chip animation:', animationData);
-    dispatch({
-      type: CHIP_ACTIONS.START_ANIMATION,
-      payload: { animationData }
-    });
+        dispatch({
+          type: CHIP_ACTIONS.START_ANIMATION,
+          payload: { animationData }
+        });
   };
 
   const handleChipClick = (event, chipData) => {
@@ -229,8 +223,8 @@ function PokerChips({
           initial={{ scale: 0, opacity: 0, x: -100 }}
           animate={{ scale: 1, opacity: 1, x: 0 }}
           exit={{ scale: 0, opacity: 0, x: -100 }}
-          whileHover={{ scale: 1.1, transition: { duration: 0.1, delay: 0 } }}
-          transition={{ duration: 0.1, ease: "easeOut", delay: (0.1 * index) }}
+          whileHover={{ scale: 1.05, transition: { duration: 0.15, ease: "easeOut" } }}
+          transition={{ duration: 0.2, ease: "easeOut", delay: (0.05 * index) }}
             className="poker-chip"
             key={index}
             data-value={pokerChip.value}
@@ -268,7 +262,7 @@ function PokerChips({
                 exit={{
                   scale: 0,
                   opacity: 0,
-                  transition: { duration: 0.2 }
+                  transition: { duration: 0.1 }
                 }}
                 transition={{
                   type: "spring",
@@ -278,7 +272,7 @@ function PokerChips({
                 }}
                 whileHover={{
                   scale: 1.1,
-                  transition: { duration: 0.1 }
+                  transition: { duration: 0.3 }
                 }}
                 style={{
                   position: "absolute",
@@ -324,8 +318,6 @@ function PokerChips({
               scale: { duration: 0.15 }
             }}
             onAnimationComplete={() => {
-              console.log('Animation completed for chip:', chipState.animatingChip.id, chipState.animatingChip.movingBack ? 'moving back' : 'arriving at placeholder');
-
               // Dispatch completion action - reducer handles all state updates atomically
               dispatch({
                 type: CHIP_ACTIONS.COMPLETE_ANIMATION,

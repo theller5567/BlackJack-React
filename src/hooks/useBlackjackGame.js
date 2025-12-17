@@ -187,16 +187,11 @@ export function useBlackjackGame() {
     dispatch({ type: ACTIONS.RESET_GAME });
   }, []);
 
-  // Check for bust and 21 whenever cards change
+  // Check for bust whenever cards change
   useEffect(() => {
     if (state.playerHand.length > 0 || state.dealerHand.length > 0) {
       const playerCount = countCards(state.playerHand);
-      // Check for player reaching 21 (blackjack or hitting to 21)
-      if (playerCount.optimal === 21) {
-        endGame('playerWins');
-        return; // Don't check for bust if player has 21
-      }
-      // Check for bust
+      // Only check for bust here - determineWinner handles all other win/loss logic
       if(playerCount.optimal > 21) {
         endGame('dealerWins');
       }
@@ -330,8 +325,6 @@ export function useBlackjackGame() {
       endGame('playerWins');
     } else if(playerTotal === 21 && dealerTotal === 21) {
       endGame('tie');
-    } else if(playerTotal === 21) {
-      endGame('playerWins');
     } else if(dealerTotal === 21) {
       endGame('dealerWins');
     } else if (playerTotal > dealerTotal) {
