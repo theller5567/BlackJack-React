@@ -25,12 +25,20 @@ const initialChipState = {
   chipsInPlaceholder: [],
   chipIdCounter: 0,
   processedAnimations: new Set(), // Track completed animations to prevent duplicates
+  animationCompleted: false, // Prevent duplicate onAnimationComplete calls
 };
 
 // Chip state reducer - handles all chip-related state changes atomically
 function chipReducer(state, action) {
   switch (action.type) {
     case CHIP_ACTIONS.START_ANIMATION:
+      return {
+        ...state,
+        animatingChip: action.payload.animationData,
+        chipIdCounter: state.chipIdCounter + 1,
+        processedAnimations: new Set(), // Reset for new animation
+        animationCompleted: false, // Reset completion flag
+      };
       return {
         ...state,
         animatingChip: action.payload.animationData,
@@ -45,7 +53,10 @@ function chipReducer(state, action) {
       // Prevent processing the same animation multiple times
       if (state.processedAnimations.has(animationKey)) {
         console.log('Animation already processed:', animationKey);
-        return state;
+        return {
+          ...state,
+          animationCompleted: true,
+        };
       }
 
       if (chipData.movingBack) {
@@ -56,6 +67,7 @@ function chipReducer(state, action) {
                 ...state,
                 animatingChip: null,
                 processedAnimations: new Set([...state.processedAnimations, animationKey]),
+                animationCompleted: true,
               };
             }
 
@@ -66,6 +78,7 @@ function chipReducer(state, action) {
           chipsInPlaceholder: filteredChips,
           animatingChip: null,
           processedAnimations: new Set([...state.processedAnimations, animationKey]),
+          animationCompleted: true,
         };
       } else {
             // Chip arrived at placeholder - add to array
@@ -89,6 +102,7 @@ function chipReducer(state, action) {
           chipsInPlaceholder: newChips,
           animatingChip: null,
           processedAnimations: new Set([...state.processedAnimations, animationKey]),
+          animationCompleted: true,
         };
       }
 
@@ -114,6 +128,7 @@ function PokerChips({
   const [chipState, dispatch] = useReducer(chipReducer, initialChipState);
   const placeholderRef = useRef(null);
   const chipRefs = useRef([]);
+  const completedAnimationsRef = useRef(new Set()); // Track completed animation callbacks
 
   // Track original chip positions for animation back
   const [chipPositions, setChipPositions] = useState({});
@@ -124,6 +139,8 @@ function PokerChips({
       dispatch({ type: CHIP_ACTIONS.CLEAR_CHIPS });
       // Clear chip positions to prevent memory leak
       setChipPositions({});
+      // Clear completed animations to prevent stale references
+      completedAnimationsRef.current.clear();
     }
   }, [clearPlaceholder]);
 
@@ -185,6 +202,9 @@ function PokerChips({
       }
     }));
 
+    // Clear any stale animation completion tracking
+    completedAnimationsRef.current.clear();
+
     // Start the animation
     animateChipToPlaceholder(chipElement, chipData);
 
@@ -205,6 +225,9 @@ function PokerChips({
 
     const originalPosition = chipPositions[chipData.id];
     const placeholderRect = placeholderRef.current.getBoundingClientRect();
+
+    // Clear any stale animation completion tracking
+    completedAnimationsRef.current.clear();
 
     // Create animation data for moving back
     const animationData = {
@@ -227,8 +250,12 @@ function PokerChips({
   };
 
   const setPokerChips = () => {
+    // Calculate remaining balance available for betting
+    const remainingBalance = playerBalance - playerBet;
+
     return pokerChips.map((pokerChip, index) => {
-      if (playerBalance >= pokerChip.value) {
+      // Only show chips that the player can afford with remaining balance
+      if (remainingBalance >= pokerChip.value) {
         return (
           <motion.button
           initial={{ scale: 0, opacity: 0, x: -100 }}
@@ -329,6 +356,14 @@ function PokerChips({
               scale: { duration: 0.15 }
             }}
             onAnimationComplete={() => {
+              // Prevent duplicate animation completion callbacks using ref
+              const animationKey = `${chipState.animatingChip?.id}-${chipState.animatingChip?.movingBack ? 'back' : 'forward'}`;
+              if (!animationKey || completedAnimationsRef.current.has(animationKey)) {
+                return; // Already processed this animation
+              }
+
+              completedAnimationsRef.current.add(animationKey);
+
               // Dispatch completion action - reducer handles all state updates atomically
               dispatch({
                 type: CHIP_ACTIONS.COMPLETE_ANIMATION,

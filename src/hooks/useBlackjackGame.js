@@ -16,6 +16,10 @@ const ACTIONS = {
   NEW_HAND: 'NEW_HAND',
   SHOW_DEALER_CARDS: 'SHOW_DEALER_CARDS',
   SET_CARDS_DEALT: 'SET_CARDS_DEALT',
+  SET_DEALING: 'SET_DEALING',
+  SET_DRAWING_CARD: 'SET_DRAWING_CARD',
+  SET_PRELOADING: 'SET_PRELOADING',
+  UPDATE_PRELOAD_PROGRESS: 'UPDATE_PRELOAD_PROGRESS',
 };
 
 // Function to create fresh initial state to prevent shared mutable references
@@ -29,6 +33,10 @@ const createInitialState = () => ({
   gameOver: false,
   showDealerCards: false,
   cardsDealt: false, // Flag to indicate if initial cards have been dealt
+  isDealing: false, // Loading state for card dealing
+  isDrawingCard: false, // Loading state for drawing a single card
+  isPreloading: true, // Loading state for preloading card images
+  preloadProgress: 0, // Progress of image preloading (0-100)
   usedCards: new Set(), // Track used cards to prevent duplicates
 });
 
@@ -70,7 +78,7 @@ function gameReducer(state, action) {
       return {
         ...state,
         playerBet: Math.max(0, state.playerBet - amount),
-        playerBalance: state.playerBalance + amount,
+        // Don't modify balance - chips just become available for betting again
       };
     }
 
@@ -125,6 +133,30 @@ function gameReducer(state, action) {
             cardsDealt: action.payload,
           };
 
+        case ACTIONS.SET_DEALING:
+          return {
+            ...state,
+            isDealing: action.payload,
+          };
+
+        case ACTIONS.SET_DRAWING_CARD:
+          return {
+            ...state,
+            isDrawingCard: action.payload,
+          };
+
+        case ACTIONS.SET_PRELOADING:
+          return {
+            ...state,
+            isPreloading: action.payload,
+          };
+
+        case ACTIONS.UPDATE_PRELOAD_PROGRESS:
+          return {
+            ...state,
+            preloadProgress: action.payload,
+          };
+
         default:
           return state;
   }
@@ -176,14 +208,85 @@ const isSoftHand = (cards) => {
   return cards.some((card) => card.rank === "A");
 };
 
+// Preload all card images to improve performance
+const preloadCardImages = async (onProgress) => {
+  return new Promise((resolve, reject) => {
+    const images = cardDeck.map(card => card.image);
+    let loadedCount = 0;
+    let failedCount = 0;
+    const totalImages = images.length;
+
+    if (totalImages === 0) {
+      resolve();
+      return;
+    }
+
+    const updateProgress = () => {
+      const progress = Math.round(((loadedCount + failedCount) / totalImages) * 100);
+      onProgress(progress);
+
+      if (loadedCount + failedCount === totalImages) {
+        // Allow some failed images but resolve anyway (fallback images will show)
+        resolve();
+      }
+    };
+
+    images.forEach(imageUrl => {
+      const img = new Image();
+
+      img.onload = () => {
+        loadedCount++;
+        updateProgress();
+      };
+
+      img.onerror = () => {
+        failedCount++;
+        console.warn(`Failed to load card image: ${imageUrl}`);
+        updateProgress();
+      };
+
+      // Add timestamp to prevent caching issues during development
+      const separator = imageUrl.includes('?') ? '&' : '?';
+      img.src = `${imageUrl}${separator}t=${Date.now()}`;
+    });
+
+    // Timeout after 30 seconds to prevent hanging
+    setTimeout(() => {
+      reject(new Error('Image preloading timed out'));
+    }, 30000);
+  });
+};
+
 // Custom hook for Blackjack game logic
 export function useBlackjackGame() {
   const [state, dispatch] = useReducer(gameReducer, initialState);
 
-  // Initialize deck on mount
+  // Initialize deck and preload images on mount
   useEffect(() => {
-    const data = cardDeck;
-    dispatch({ type: ACTIONS.SET_DECK, payload: data });
+    const initializeGame = async () => {
+      try {
+        // Start preloading images
+        const preloadPromise = preloadCardImages((progress) => {
+          dispatch({ type: ACTIONS.UPDATE_PRELOAD_PROGRESS, payload: progress });
+        });
+
+        // Set deck data immediately
+        const data = cardDeck;
+        dispatch({ type: ACTIONS.SET_DECK, payload: data });
+
+        // Wait for images to preload
+        await preloadPromise;
+
+        // Mark preloading as complete
+        dispatch({ type: ACTIONS.SET_PRELOADING, payload: false });
+      } catch (error) {
+        console.error('Failed to preload card images:', error);
+        // Still allow game to continue with fallback images
+        dispatch({ type: ACTIONS.SET_PRELOADING, payload: false });
+      }
+    };
+
+    initializeGame();
   }, []);
 
   // Initialize/reset game state on mount
@@ -344,6 +447,7 @@ export function useBlackjackGame() {
   }, [dealerPlay]);
 
   const dealCards = useCallback(async () => {
+    dispatch({ type: ACTIONS.SET_DEALING, payload: true });
     try {
       await getCards(2, "playerHand");
       await getCards(2, "dealerHand");
@@ -352,22 +456,32 @@ export function useBlackjackGame() {
       console.error('Failed to deal cards:', error);
       // Reset game state on failure to prevent inconsistent state
       dispatch({ type: ACTIONS.RESET_GAME });
+    } finally {
+      dispatch({ type: ACTIONS.SET_DEALING, payload: false });
     }
   }, [getCards]);
 
   const drawCards = useCallback(async () => {
-    const drawnCard = drawCardSync("playerHand");
+    dispatch({ type: ACTIONS.SET_DRAWING_CARD, payload: true });
+    try {
+      const drawnCard = drawCardSync("playerHand");
 
-    if (drawnCard) {
-      // Wait for state update
-      await new Promise(resolve => setTimeout(resolve, 100));
+      if (drawnCard) {
+        // Wait for state update
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    } finally {
+      dispatch({ type: ACTIONS.SET_DRAWING_CARD, payload: false });
     }
   }, [drawCardSync]);
 
   const handlePokerChipClick = useCallback((e) => {
     const value = Number(e.target.parentNode.dataset.value);
-    dispatch({ type: ACTIONS.PLACE_BET, payload: { amount: value } });
-  }, [dispatch]); // Add dispatch dependency to prevent stale closures
+    // Prevent betting more than available balance
+    if (value <= (state.playerBalance - state.playerBet)) {
+      dispatch({ type: ACTIONS.PLACE_BET, payload: { amount: value } });
+    }
+  }, [dispatch, state.playerBalance, state.playerBet]);
 
   const handleChipRemoved = useCallback((chipValue) => {
     dispatch({ type: ACTIONS.REMOVE_BET, payload: { amount: chipValue } });
@@ -393,6 +507,10 @@ export function useBlackjackGame() {
     gameOver: state.gameOver,
     showDealerCards: state.showDealerCards,
     cardsDealt: state.cardsDealt,
+    isDealing: state.isDealing,
+    isDrawingCard: state.isDrawingCard,
+    isPreloading: state.isPreloading,
+    preloadProgress: state.preloadProgress,
 
     // Functions
     dealCards,

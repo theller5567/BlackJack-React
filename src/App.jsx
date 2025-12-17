@@ -4,7 +4,8 @@ import Header from "./components/Header";
 import PokerChips from "./components/PokerChips";
 import PlayerBalance from "./components/PlayerBalance";
 import { useBlackjackGame } from "./hooks/useBlackjackGame";
-import { useRef, useMemo } from "react";
+import { useMemo } from "react";
+import GameOver from "./components/GameOver";
 
 // Game configuration constants
 const CARD_OVERLAP = 40;
@@ -23,6 +24,10 @@ function App() {
     gameOver,
     showDealerCards,
     cardsDealt,
+    isDealing,
+    isDrawingCard,
+    isPreloading,
+    preloadProgress,
     // Functions
     dealCards,
     drawCards,
@@ -42,6 +47,30 @@ function App() {
     clearPlaceholder: gameOver || playerBet === 0,
     onChipRemoved: handleChipRemoved,
   }), [playerBalance, playerBet, gameOver, handlePokerChipClick, handleChipRemoved]);
+
+  // Show preloading screen while images are loading
+  if (isPreloading) {
+    return (
+      <>
+        <Header />
+        <div className="preloading-overlay">
+          <div className="preloading-content">
+            <div className="preloading-spinner">
+              <div className="spinner"></div>
+              <h2>Loading Cards...</h2>
+              <p>{preloadProgress}%</p>
+              <div className="progress-bar">
+                <div
+                  className="progress-fill"
+                  style={{ width: `${preloadProgress}%` }}
+                ></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
@@ -64,46 +93,23 @@ function App() {
             </motion.p>}
           </AnimatePresence>
         <div className="card-table">
-          
-          <AnimatePresence>
-            {gameOver && (
-              <motion.div
-                className="game-over-text"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                transition={{ duration: 0.3 }}
-              >
-                {playerWins === true && <p>Player wins!</p>}
-                {playerWins === false && <p>Dealer wins!</p>}
-                {playerWins === null && <p>It's a tie!</p>}
-                <motion.button
-                  className="deal-again-button"
-                  onClick={startNewHand}
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                >
-                  Deal Again
-                </motion.button>
-                {playerBalance <= 0 && (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.2 }}
-                  >
-                    <p>Game Over! You've run out of money.</p>
-                    <motion.button
-                      onClick={resetGameState}
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                    >
-                      Reset Game
-                    </motion.button>
-                  </motion.div>
-                )}
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {isDealing && (
+            <div className="loading-overlay">
+              <div className="loading-spinner">
+                <div className="spinner"></div>
+                <p>Dealing cards...</p>
+              </div>
+            </div>
+          )}
+
+          <GameOver
+            gameOver={gameOver}
+            playerWins={playerWins}
+            playerBalance={playerBalance}
+            onStartNewHand={startNewHand}
+            onResetGame={resetGameState}
+            isDealing={isDealing}
+          />
           <div className="playerHand">
             <p className="card-total">{playerHand.length > 0 ? countCards(playerHand).display : ''}</p>
             <div className="cards">
@@ -218,9 +224,14 @@ function App() {
               transition={{ duration: 0.3, ease: "easeOut", delay: 0.6, type: "spring", stiffness: 400, damping: 25 }}
               className="hit-button"
               onClick={drawCards}
+              disabled={isDrawingCard}
               key="hit-button"
+              style={{
+                opacity: isDrawingCard ? 0.6 : 1,
+                cursor: isDrawingCard ? 'not-allowed' : 'pointer'
+              }}
             >
-              Hit
+              {isDrawingCard ? 'Drawing...' : 'Hit'}
             </motion.button>
           )}
         </AnimatePresence>
