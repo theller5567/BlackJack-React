@@ -124,6 +124,7 @@ function PokerChips({
   handlePokerChipClick,
   clearPlaceholder = false,
   onChipRemoved = () => {},
+  disabled = false,
 }) {
   const [chipState, dispatch] = useReducer(chipReducer, initialChipState);
   const placeholderRef = useRef(null);
@@ -188,6 +189,7 @@ function PokerChips({
   };
 
   const handleChipClick = (event, chipData) => {
+    if (disabled) return;
     const chipElement = event.currentTarget;
 
     // Store the original position of this chip for potential animation back
@@ -213,6 +215,7 @@ function PokerChips({
   };
 
   const handlePlaceholderChipClick = (chipData) => {
+    if (disabled) return;
     if (!chipPositions[chipData.id]) {
       return;
     }
@@ -279,7 +282,7 @@ function PokerChips({
   };
 
   return (
-    <div className="poker-chips">
+    <div className={`poker-chips ${disabled ? 'disabled' : ''}`}>
       <div className="chip-placeholder-container">
         <p className="balance">Betting: ${playerBet}</p>
         <div className="chip-placeholder" ref={placeholderRef}>

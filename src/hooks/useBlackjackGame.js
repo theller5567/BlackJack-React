@@ -132,10 +132,11 @@ function gameReducer(state, action) {
     case ACTIONS.RESET_GAME:
       // Reset card instance counter for completely new games
       cardInstanceCounter = 0;
-      // Ensure all loading states are reset
+      // Reset state but preserve the current preloading status
       return {
         ...createInitialState(),
-        isPreloading: false, // Explicitly ensure preloading is false
+        isPreloading: state.isPreloading,
+        preloadProgress: state.preloadProgress,
       };
 
         case ACTIONS.SHOW_DEALER_CARDS:
@@ -316,10 +317,6 @@ export function useBlackjackGame() {
     initializeGame();
   }, [hasPreloaded]); // Include hasPreloaded in deps to prevent multiple runs
 
-  // Initialize/reset game state on mount
-  useEffect(() => {
-    dispatch({ type: ACTIONS.RESET_GAME });
-  }, []);
 
   // Check for bust and 21 whenever cards change
   useEffect(() => {
@@ -515,16 +512,18 @@ export function useBlackjackGame() {
   }, [drawCardSync]);
 
   const handlePokerChipClick = useCallback((e) => {
+    if (state.cardsDealt) return;
     const value = Number(e.target.parentNode.dataset.value);
     // Prevent betting more than available balance
     if (value <= (state.playerBalance - state.playerBet)) {
       dispatch({ type: ACTIONS.PLACE_BET, payload: { amount: value } });
     }
-  }, [dispatch, state.playerBalance, state.playerBet]);
+  }, [dispatch, state.playerBalance, state.playerBet, state.cardsDealt]);
 
   const handleChipRemoved = useCallback((chipValue) => {
+    if (state.cardsDealt) return;
     dispatch({ type: ACTIONS.REMOVE_BET, payload: { amount: chipValue } });
-  }, [dispatch]); // Add dispatch dependency to prevent stale closures
+  }, [dispatch, state.cardsDealt]);
 
   const resetGameState = useCallback(() => {
     dispatch({ type: ACTIONS.RESET_GAME });

@@ -6,6 +6,7 @@ import PlayerBalance from "./components/PlayerBalance";
 import { useBlackjackGame } from "./hooks/useBlackjackGame";
 import { useMemo } from "react";
 import GameOver from "./components/GameOver";
+import DealButton from "./components/DealButton";
 
 // Game configuration constants
 const CARD_OVERLAP = 40;
@@ -46,7 +47,8 @@ function App() {
     handlePokerChipClick,
     clearPlaceholder: gameOver || playerBet === 0,
     onChipRemoved: handleChipRemoved,
-  }), [playerBalance, playerBet, gameOver, handlePokerChipClick, handleChipRemoved]);
+    disabled: cardsDealt && !gameOver,
+  }), [playerBalance, playerBet, gameOver, handlePokerChipClick, handleChipRemoved, cardsDealt]);
 
   // Show preloading screen while images are loading
   if (isPreloading) {
@@ -77,7 +79,21 @@ function App() {
     <Header />
     <PokerChips {...pokerChipsProps} />
     <PlayerBalance playerBalance={playerBalance} />
-    <main>
+    <DealButton
+      playerHand={playerHand}
+      playerBet={playerBet}
+      cardsDealt={cardsDealt}
+      onDeal={dealCards}
+    />
+    <GameOver
+      gameOver={gameOver}
+      playerWins={playerWins}
+      playerBalance={playerBalance}
+      onStartNewHand={startNewHand}
+      onResetGame={resetGameState}
+      isDealing={isDealing}
+    />
+    <main style={{zIndex: (isDealing && gameOver) ? 10 : 0}}>
       <div className="game-status">
       <AnimatePresence>
             {playerBet <= 0 &&
@@ -102,14 +118,7 @@ function App() {
             </div>
           )}
 
-          <GameOver
-            gameOver={gameOver}
-            playerWins={playerWins}
-            playerBalance={playerBalance}
-            onStartNewHand={startNewHand}
-            onResetGame={resetGameState}
-            isDealing={isDealing}
-          />
+          
           <div className="playerHand">
             <p className="card-total">{playerHand.length > 0 ? countCards(playerHand).display : ''}</p>
             <div className="cards">
@@ -232,21 +241,6 @@ function App() {
               }}
             >
               {isDrawingCard ? 'Drawing...' : 'Hit'}
-            </motion.button>
-          )}
-        </AnimatePresence>
-        <AnimatePresence>
-          {((playerHand.length === 0 && playerBet > 0) || (!cardsDealt && playerBet > 0 && playerHand.length > 0)) && (
-            <motion.button
-              initial={{ opacity: 1, y: 500 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 1, y: 500 }}
-              transition={{ duration: 0.2, ease: "easeOut", type: "spring", stiffness: 400, damping: 25 }}
-              className="deal-button"
-              onClick={dealCards}
-              key="deal-button"
-            >
-              Deal
             </motion.button>
           )}
         </AnimatePresence>
