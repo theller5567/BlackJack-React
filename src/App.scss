@@ -53,6 +53,7 @@ header {
     text-align: center;
   }
   h1 {
+    position: relative;
     display: inline;
     color: #fff;
     font-family: 'Arial', sans-serif;
@@ -66,7 +67,7 @@ header {
     &:before {
       content: '';
       position: absolute;
-      top: 5px;
+      top: -8px;
       left: 35px;
       width: 70px;
       height: 55px;
